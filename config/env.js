@@ -31,7 +31,6 @@ const toBool = (v, def = false) => {
 };
 const isValidUrl = (u) => {
   try {
-    // Allow http(s) and gs:// style is not required here
     const parsed = new URL(u);
     return parsed.protocol === 'http:' || parsed.protocol === 'https:';
   } catch {
@@ -64,7 +63,10 @@ const raw = {
   RECRAFT_HTTP_TIMEOUT_MS: toInt(process.env.RECRAFT_HTTP_TIMEOUT_MS, 30000, { min: 1000, max: 300000 }),
   RECRAFT_COOLDOWN_MINUTES: toInt(process.env.RECRAFT_COOLDOWN_MINUTES, 20, { min: 1, max: 120 }),
   RECRAFT_MAX_SVG_BYTES: toInt(process.env.RECRAFT_MAX_SVG_BYTES, 500 * 1024, { min: 10 * 1024, max: 5 * 1024 * 1024 }),
-  
+
+  // Freepik (supports common aliases)
+  FREEPIK_API_KEY: toStr(process.env.FREEPIK_API_KEY || process.env.FREEPIK_KEY || process.env.FREEPIK_TOKEN),
+
   // Pipeline
   PIPELINE_TIMEOUT_MS: toInt(process.env.PIPELINE_TIMEOUT_MS, 120_000, { min: 10_000, max: 600_000 }),
 
@@ -96,6 +98,7 @@ function validateConfig(cfg) {
   if (!cfg.GOOGLE_PROJECT_ID) errors.push('GOOGLE_PROJECT_ID is required.');
   if (!cfg.RECRAFT_API_KEY) warnings.push('RECRAFT_API_KEY is missing — Recraft calls will fail unless local fallback is available.');
   if (!cfg.GEMINI_API_KEY) warnings.push('GEMINI_API_KEY is missing — Gemini-based features will degrade.');
+  if (!cfg.FREEPIK_API_KEY) warnings.push('FREEPIK_API_KEY is missing — Freepik-based features will be disabled.');
 
   // Port
   if (!(cfg.PORT >= 1 && cfg.PORT <= 65535)) errors.push('PORT must be between 1 and 65535');
@@ -106,6 +109,9 @@ function validateConfig(cfg) {
   }
   if (cfg.RECRAFT_API_KEY && !/^[A-Za-z0-9_\-]{20,200}$/.test(cfg.RECRAFT_API_KEY)) {
     warnings.push('RECRAFT_API_KEY format looks unusual. Double-check your key.');
+  }
+  if (cfg.FREEPIK_API_KEY && !/^[A-Za-z0-9_\-]{10,200}$/.test(cfg.FREEPIK_API_KEY)) {
+    warnings.push('FREEPIK_API_KEY format looks unusual. Double-check your key.');
   }
 
   // Location / Model IDs
@@ -126,7 +132,6 @@ function validateConfig(cfg) {
 
   // Temp directory path sanity
   try {
-    // Prevent accidental temp dir set to root or project root
     const resolved = path.resolve(cfg.TEMP_DIR);
     const root = path.parse(resolved).root;
     if (resolved === root) errors.push('TEMP_DIR must not be a filesystem root.');
@@ -139,7 +144,6 @@ function validateConfig(cfg) {
     throw new Error(`${banner}\n- ${errors.join('\n- ')}`);
   }
 
-  // Emit warnings once
   if (warnings.length) {
     console.warn('⚠️ Config warnings:\n- ' + warnings.join('\n- '));
   }
