@@ -18,14 +18,15 @@
  */
 
 const crypto = require('crypto');
-const path = require('path');
-const fs = require('fs').promises;
 
 const config = require('../config/env');
-const geminiService = require('../services/geminiService');
-const imagenService = require('../services/imagenService');
-const { vectorizeImage } = require('../services/recraftService');
-const { localVectorize, isLocalVectorizeAvailable } = require('../utils/localVectorize');
+const { nowNs, msSince } = require('./strategies/utils');
+const primaryPipeline = require('./strategies/primaryPipeline');
+const geminiDirectStrategy = require('./strategies/geminiDirectStrategy');
+const localPotraceStrategy = require('./strategies/localPotraceStrategy');
+const rasterOnlyStrategy = require('./strategies/rasterOnlyStrategy');
+const emergencyFallbackStrategy = require('./strategies/emergencyFallbackStrategy');
+
 
 // ---------------- Tunables ----------------
 const MAX_PROMPT_LEN = 800;
@@ -37,12 +38,8 @@ const MAX_SVG_BYTES = Number(process.env.RECRAFT_MAX_SVG_BYTES || 500 * 1024); /
 function newCorrelationId() {
   return crypto.randomBytes(8).toString('hex');
 }
-function nowNs() {
-  return process.hrtime.bigint();
-}
-function msSince(startNs) {
-  return Number((process.hrtime.bigint() - startNs) / 1_000_000n);
-}
+
+
 function safePreview(s = '', n = LOG_PREVIEW_LEN) {
   const t = String(s);
   return t.length > n ? t.slice(0, n) + '…' : t;
@@ -64,19 +61,7 @@ async function withTimeout(promise, ms, label = 'operation') {
     clearTimeout(timer);
   }
 }
-async function ensureTempDir(dir) {
-  await fs.mkdir(dir, { recursive: true });
-}
-function uniqueSvgName(prefix = 'vector_local') {
-  return `${prefix}_${Date.now()}_${crypto.randomBytes(4).toString('hex')}.svg`;
-}
-async function saveSvg(svgCode, method = 'unknown', prefix = 'vector_local') {
-  await ensureTempDir(config.TEMP_DIR);
-  const fileName = uniqueSvgName(prefix);
-  const svgPath = path.join(config.TEMP_DIR, fileName);
-  await fs.writeFile(svgPath, svgCode, 'utf8');
-  return { svgCode, svgUrl: `/temp/${fileName}`, method };
-}
+
 
 // Fallback SVG for critical failures
 const FALLBACK_SIMPLE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
@@ -86,297 +71,30 @@ const FALLBACK_SIMPLE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 
   <text x="50" y="95" text-anchor="middle" font-family="Arial" font-size="8" fill="#333">Generated Design</text>
 </svg>`;
 
-// Add this function to generate a simple SVG based on prompt keywords
-function generateSimpleSVG(prompt) {
-  const colors = ['#7c3aed', '#ec4899', '#06b6d4', '#10b981', '#f59e0b'];
-  const randomColor = colors[Math.floor(Math.random() * colors.length)];
-  
-  // Simple keyword-based generation
-  let svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">`;
-  svg += `<rect width="200" height="200" fill="#ffffff"/>`;
-  
-  if (prompt.toLowerCase().includes('logo')) {
-    // Simple logo design
-    svg += `<circle cx="100" cy="100" r="60" fill="${randomColor}" opacity="0.9"/>`;
-    svg += `<circle cx="100" cy="100" r="40" fill="#ffffff"/>`;
-    svg += `<circle cx="100" cy="100" r="20" fill="${randomColor}"/>`;
-  } else if (prompt.toLowerCase().includes('character') || prompt.toLowerCase().includes('mascot')) {
-    // Simple character
-    svg += `<circle cx="100" cy="80" r="30" fill="${randomColor}"/>`;  // Head
-    svg += `<ellipse cx="100" cy="130" rx="25" ry="35" fill="${randomColor}"/>`;  // Body
-    svg += `<circle cx="88" cy="75" r="5" fill="#ffffff"/>`;  // Left eye
-    svg += `<circle cx="112" cy="75" r="5" fill="#ffffff"/>`;  // Right eye
-    svg += `<path d="M 90 90 Q 100 95 110 90" stroke="#ffffff" stroke-width="2" fill="none"/>`;  // Smile
-  } else if (prompt.toLowerCase().includes('geometric')) {
-    // Geometric pattern
-    for (let i = 0; i < 5; i++) {
-      const x = 40 + (i * 30);
-      const y = 40 + (i * 25);
-      const size = 30 - (i * 4);
-      svg += `<rect x="${x}" y="${y}" width="${size}" height="${size}" fill="${colors[i % colors.length]}" opacity="0.7" transform="rotate(${i * 15} 100 100)"/>`;
-    }
-  } else {
-    // Default abstract design
-    svg += `<polygon points="100,40 140,120 60,120" fill="${randomColor}" opacity="0.8"/>`;
-    svg += `<circle cx="100" cy="100" r="40" fill="none" stroke="${randomColor}" stroke-width="3"/>`;
-    svg += `<rect x="70" y="70" width="60" height="60" fill="${randomColor}" opacity="0.3" transform="rotate(45 100 100)"/>`;
-  }
-  
-  svg += `</svg>`;
-  return svg;
-}
 
-// Enhanced fallback strategy with simple SVG generation
-async function emergencyFallbackStrategy(context, timings, cid) {
-  console.log(`[${cid}] Emergency fallback: generating simple SVG locally...`);
-  
-  try {
-    // Generate a simple SVG based on the prompt
-    const simpleSvg = generateSimpleSVG(context.userPrompt);
-    
-    // Save to temp directory
-    const fileName = uniqueSvgName('fallback');
-    const filePath = path.join(config.TEMP_DIR, fileName);
-    await fs.writeFile(filePath, simpleSvg, 'utf8');
-    
-    return {
-      success: true,
-      partial: true,
-      mode: 'emergency_fallback',
-      svgUrl: `/temp/${fileName}`,
-      svgCode: simpleSvg,
-      rasterImageUrl: null,
-      enhancedPrompt: context.userPrompt + ' (simplified)',
-      originalPrompt: context.userPrompt,
-      message: 'Generated a simplified design due to service connectivity issues. Please check your API configuration.',
-      correlationId: cid
-    };
-  } catch (error) {
-    console.error(`[${cid}] Emergency fallback failed:`, error);
-    return null;
-  }
-}
-
-// --------------- Strategy fns ----------------
-
-/**
- * Primary pipeline:
- *  - Enhance prompt with Gemini
- *  - Generate raster with Imagen
- *  - Vectorize with Recraft (service itself may fall back to local if credits depleted)
- */
-async function primaryPipeline(context, timings, cid) {
-  const { userPrompt } = context;
-
-  // 1) Enhance
-  {
-    const t0 = nowNs();
-    console.log(`[${cid}] [1/3] Enhancing prompt…`);
-    try {
-      context.enhancedPrompt = await geminiService.enhancePrompt(userPrompt);
-      
-      // --- ADD THIS LINE ---
-      console.log(`[${cid}] Enhanced Prompt: ${context.enhancedPrompt}`);
-      // --- END OF CHANGE ---
-
-    } catch (e) {
-      console.warn(`[${cid}] Prompt enhancement failed: ${e?.message || e}`);
-      context.enhancedPrompt = userPrompt;
-    } finally {
-      timings.enhanceMs = msSince(t0);
-    }
-  }
-
-  // 2) Raster (Imagen)
-  {
-    const t0 = nowNs();
-    console.log(`[${cid}] [2/3] Generating image with Imagen…`);
-    try {
-      context.raster = await imagenService.generateImage(context.enhancedPrompt);
-      // propagate prompt to downstream vectorizer (used only if we ever fall back to direct-gen)
-      context.raster.prompt = context.enhancedPrompt;
-    } catch (error) {
-      console.error(`[${cid}] Raster generation failed: ${error.message}`);
-      throw error; // Will be caught by generateSvgWithFallbacks
-    }
-    timings.rasterMs = msSince(t0);
-  }
-
-  // 3) Vectorize (Recraft)
-  {
-    const t0 = nowNs();
-    console.log(`[${cid}] [3/3] Vectorizing image with Recraft…`);
-    try {
-      const vector = await vectorizeImage(context.raster); // returns { svgCode, svgUrl, method }
-      timings.vectorMs = msSince(t0);
-
-      console.log(`[SUCCESS ${cid}] Primary pipeline completed (method=${vector.method || 'unknown'}).`);
-      return {
-        success: true,
-        partial: false,
-        mode: vector.method || 'full',
-        svgUrl: vector.svgUrl,
-        svgCode: vector.svgCode,
-        rasterImageUrl: context.raster.imageUrl,
-        enhancedPrompt: context.enhancedPrompt,
-        originalPrompt: userPrompt,
-        message:
-          vector.method === 'vector_local'
-            ? 'Vectorized locally. Results may differ from cloud vectorization.'
-            : 'High-quality SVG design created successfully',
-        correlationId: cid,
-      };
-    } catch (error) {
-      console.error(`[${cid}] Vectorization failed: ${error.message}`);
-      timings.vectorMs = msSince(t0);
-      
-      // Immediate fallback to local vectorization
-      if (isLocalVectorizeAvailable()) {
-        console.warn(`[${cid}] Falling back to local vectorization...`);
-        try {
-          const localInput = context.raster.imageBuffer ?? context.raster.imagePath;
-          const svg = await localVectorize(localInput, {
-            resizeMax: 1024,
-            threshold: 180,
-            turdSize: 50,
-            color: '#000000',
-            background: '#ffffff',
-            svgo: true,
-          });
-          const saved = await saveSvg(svg, 'vector_local', 'vector_local');
-          
-          return {
-            success: true,
-            partial: false,
-            mode: 'vector_local',
-            svgUrl: saved.svgUrl,
-            svgCode: saved.svgCode,
-            rasterImageUrl: context.raster.imageUrl,
-            enhancedPrompt: context.enhancedPrompt,
-            originalPrompt: userPrompt,
-            message: 'Vectorized locally. Results may differ from cloud vectorization.',
-            correlationId: cid,
-          };
-        } catch (localError) {
-          console.error(`[${cid}] Local vectorization failed: ${localError.message}`);
-          throw error; // Will be caught by generateSvgWithFallbacks
-        }
-      }
-      
-      throw error; // Will be caught by generateSvgWithFallbacks
-    }
-  }
-}
-
-/**
- * Gemini-direct fallback: ask Gemini to return raw SVG.
- * Can be used even if raster generation failed.
- */
-async function geminiDirectStrategy(context, _timings, cid) {
-  console.log(`[${cid}] Fallback: generating SVG directly with Gemini…`);
-  try {
-    const svg = await geminiService.generateFallbackSvg(context.enhancedPrompt || context.userPrompt);
-    if (!svg) return null;
-
-    return {
-      success: true,
-      partial: true,
-      mode: 'fallback_svg',
-      svgUrl: svg.svgUrl,
-      svgCode: svg.svgCode,
-      rasterImageUrl: context.raster?.imageUrl || null,
-      enhancedPrompt: context.enhancedPrompt,
-      originalPrompt: context.userPrompt,
-      message: 'SVG design created using fallback mode',
-      correlationId: cid,
-    };
-  } catch (error) {
-    console.error(`[${cid}] Gemini direct SVG failed: ${error.message}`);
-    return null;
-  }
-}
-
-/**
- * Local potrace fallback: requires a raster result.
- * Only run if we already have raster bytes/path in context.
- */
-async function localPotraceStrategy(context, _timings, cid) {
-  if (!context.raster) return null;
-  if (!isLocalVectorizeAvailable()) return null;
-
-  console.log(`[${cid}] Fallback: vectorizing locally via potrace…`);
-  try {
-    const localInput = context.raster.imageBuffer ?? context.raster.imagePath;
-    const svg = await localVectorize(localInput, {
-      resizeMax: 1024,
-      threshold: 180,
-      turdSize: 50,
-      color: '#000000',
-      background: '#ffffff',
-      svgo: true,
-    });
-
-    const saved = await saveSvg(svg, 'vector_local', 'vector_local');
-    return {
-      success: true,
-      partial: false,
-      mode: 'vector_local',
-      svgUrl: saved.svgUrl,
-      svgCode: saved.svgCode,
-      rasterImageUrl: context.raster.imageUrl,
-      enhancedPrompt: context.enhancedPrompt,
-      originalPrompt: context.userPrompt,
-      message: 'Vectorized locally. Results may differ from cloud vectorization.',
-      correlationId: cid,
-    };
-  } catch (error) {
-    console.error(`[${cid}] Local vectorization failed: ${error.message}`);
-    return null;
-  }
-}
-
-/**
- * Raster-only fallback: show PNG if we have it, with an explanatory message.
- */
-async function rasterOnlyStrategy(context, _timings, cid) {
-  if (!context.raster?.imageUrl) return null;
-  
-  return {
-    success: true,
-    partial: true,
-    mode: 'raster_only',
-    svgUrl: null,
-    svgCode: null,
-    rasterImageUrl: context.raster.imageUrl,
-    enhancedPrompt: context.enhancedPrompt,
-    originalPrompt: context.userPrompt,
-    message: 'Vectorization temporarily unavailable. Showing raster only.',
-    correlationId: cid,
-  };
-}
 
 /**
  * Orchestrator: try each strategy in order and return on first success.
  */
 async function generateSvgWithFallbacks(context, timings, cid) {
-  const strategies = [
-    { name: 'primary',       fn: () => primaryPipeline(context, timings, cid) },
-    { name: 'gemini_direct', fn: () => geminiDirectStrategy(context, timings, cid) },
-    { name: 'local_potrace', fn: () => localPotraceStrategy(context, timings, cid) },
-    { name: 'raster_only',   fn: () => rasterOnlyStrategy(context, timings, cid) },
-    { name: 'emergency_fallback', fn: () => emergencyFallbackStrategy(context, timings, cid) }
-  ];
+  const strategies = {
+    primary: primaryPipeline,
+    gemini_direct: geminiDirectStrategy,
+    local_potrace: localPotraceStrategy,
+    raster_only: rasterOnlyStrategy,
+    emergency_fallback: emergencyFallbackStrategy,
+  };
 
-  for (const strategy of strategies) {
+  for (const [name, fn] of Object.entries(strategies)) {
     try {
-      console.log(`[${cid}] Attempting ${strategy.name} strategy…`);
-      const result = await strategy.fn();
+      console.log(`[${cid}] Attempting ${name} strategy…`);
+      const result = await fn(context, timings, cid);
       if (result) {
-        result.strategy = strategy.name;
+        result.strategy = name;
         return result;
       }
     } catch (error) {
-      console.warn(`[${cid}] ${strategy.name} failed:`, error?.message || error);
+      console.warn(`[${cid}] ${name} failed:`, error?.message || error);
     }
   }
   
