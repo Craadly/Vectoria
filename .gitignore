@@ -16,3 +16,4 @@ service-account-key.json
 .env.production
 .env
 .vs
+.env
