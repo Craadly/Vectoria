@@ -30,3 +30,18 @@ It combines the power of **Gemini** (prompt understanding), **Imagen** (image sy
 git clone https://github.com/Craadly/Vectoria.git
 cd Vectoria
 npm install
+
+## 🔧 Usage
+
+1. Create a `.env` file with your API credentials (see `.env` for required keys).
+2. Start the development server:
+
+   ```bash
+   npm run dev
+   ```
+
+   For production use:
+
+   ```bash
+   npm start
+   ```
