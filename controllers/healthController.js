@@ -17,7 +17,7 @@ const os = require('os');
 const pkg = require('../package.json');
 const config = require('../config/env');
 const { isGoogleAuthInitialized } = require('../services/imagenService');
-const { isRecraftInCooldown } = require('../services/recraftService');
+const { isRecraftInCooldown, recraftCooldownUntil } = require('../services/recraftService');
 
 function bool(v) { return !!v; }
 
@@ -68,7 +68,7 @@ function checkHealth(req, res) {
   
   if (isCooldown) {
     // Calculate remaining cooldown minutes
-    const cooldownEnd = require('../services/recraftService').recraftCooldownUntil;
+    const cooldownEnd = recraftCooldownUntil();
     const remainingMs = Math.max(0, cooldownEnd - Date.now());
     const remainingMins = Math.ceil(remainingMs / 60000);
     cooldownReason = `credit cooldown active (${remainingMins} minute(s) remaining)`;
