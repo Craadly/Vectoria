@@ -7,6 +7,7 @@ const path = require('path');
 const config = require('./config/env');
 const apiRoutes = require('./routes/api');
 const inspirationRoutes = require('./routes/inspirationRoutes');
+const pipelineRoutes = require('./routes/pipelineRoutes');
 const { startCleanup } = require('./utils/cleanup');
 
 // --- App Initialization ---
@@ -71,6 +72,7 @@ app.all('/api/generate-svg', (req, res) => {
 // --- API Route Handling ---
 app.use('/api', apiRoutes);
 app.use('/api/inspiration', inspirationRoutes);
+app.use('/api/pipeline', pipelineRoutes);
 
 // --- Error Handling ---
 app.use((err, req, res, next) => {
