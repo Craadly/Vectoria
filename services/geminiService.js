@@ -1,4 +1,4 @@
-// services/imagenService.js
+// Gemini service
 'use strict';
 
 /**
