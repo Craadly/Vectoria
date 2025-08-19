@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vectoria.ai - Next-Gen AI Vector Generation</title>
+    <meta name="description" content="Transform ideas into stunning SVG graphics instantly with advanced AI. Professional vector designs without design skills.">
+    
+    <!-- Preconnect to external domains -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    
+    <!-- Styles -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- Animated Gradient Background -->
+    <div class="bg-animation">
+        <div class="gradient-orb orb-1"></div>
+        <div class="gradient-orb orb-2"></div>
+        <div class="gradient-orb orb-3"></div>
+    </div>
+    
+    <!-- Grid Pattern Overlay -->
+    <div class="grid-pattern"></div>
+    
+    <!-- Main Application -->
+    <div class="app-wrapper">
+        <!-- Header Navigation -->
+        <header class="app-header">
+            <nav class="nav-container">
+                <div class="nav-left">
+                    <a href="/" class="logo-link">
+                        <div class="logo">
+                            <div class="logo-icon">
+                                <svg viewBox="0 0 32 32" fill="none">
+                                    <path d="M16 2L28 8V16L16 22L4 16V8L16 2Z" stroke="url(#gradient1)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                    <path d="M16 22V30" stroke="url(#gradient1)" stroke-width="2" stroke-linecap="round"/>
+                                    <path d="M4 16L16 22L28 16" stroke="url(#gradient1)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                    <defs>
+                                        <linearGradient id="gradient1" x1="0%" y1="0%" x2="100%" y2="100%">
+                                            <stop offset="0%" style="stop-color:#8B5CF6"/>
+                                            <stop offset="100%" style="stop-color:#EC4899"/>
+                                        </linearGradient>
+                                    </defs>
+                                </svg>
+                            </div>
+                            <div class="logo-text">
+                                Vectoria<span class="logo-ai">.ai</span>
+                            </div>
+                        </div>
+                    </a>
+                </div>
+                
+                <div class="nav-center">
+                    <div class="nav-links">
+                        <a href="#create" class="nav-link active">Create</a>
+                        <a href="#gallery" class="nav-link">Gallery</a>
+                        <a href="#pricing" class="nav-link">Pricing</a>
+                        <a href="#api" class="nav-link">API</a>
+                    </div>
+                </div>
+                
+                <div class="nav-right">
+                    <div class="server-status" id="serverStatus">
+                        <span class="status-dot"></span>
+                        <span class="status-text">Checking...</span>
+                    </div>
+                    <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme">
+                        <svg class="sun-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="5"/>
+                            <line x1="12" y1="1" x2="12" y2="3"/>
+                            <line x1="12" y1="21" x2="12" y2="23"/>
+                            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+                            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+                            <line x1="1" y1="12" x2="3" y2="12"/>
+                            <line x1="21" y1="12" x2="23" y2="12"/>
+                            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+                            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+                        </svg>
+                        <svg class="moon-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+                        </svg>
+                    </button>
+                </div>
+                
+                <button class="mobile-nav-toggle" id="mobileNavToggle" aria-label="Toggle navigation">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </button>
+            </nav>
+        </header>
+
+        <!-- Hero Section -->
+        <section class="hero">
+            <div class="hero-content">
+                <div class="hero-badge">
+                    <span class="badge-pulse"></span>
+                    <span class="badge-text">AI-Powered Generation</span>
+                </div>
+                
+                <h1 class="hero-title">
+                    <span class="title-word">Create</span>
+                    <span class="title-word gradient-text">Stunning</span>
+                    <span class="title-word">Vectors</span>
+                    <span class="title-word">Instantly</span>
+                </h1>
+                
+                <p class="hero-description">
+                    Transform your ideas into professional SVG graphics with cutting-edge AI. 
+                    No design experience needed.
+                </p>
+                
+                <div class="hero-cta">
+                    <button class="btn btn-primary btn-glow" id="heroStart">
+                        <span>Start Creating</span>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M5 12h14M12 5l7 7-7 7"/>
+                        </svg>
+                    </button>
+                    <button class="btn btn-ghost" id="heroDemo">
+                        <span>Watch Demo</span>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polygon points="5 3 19 12 5 21 5 3"/>
+                        </svg>
+                    </button>
+                </div>
+                
+                <div class="hero-metrics">
+                    <div class="metric">
+                        <div class="metric-value" data-target="100000">0</div>
+                        <div class="metric-label">Designs Created</div>
+                    </div>
+                    <div class="metric-divider"></div>
+                    <div class="metric">
+                        <div class="metric-value"><span data-target="4.9">0</span>s</div>
+                        <div class="metric-label">Avg. Generation</div>
+                    </div>
+                    <div class="metric-divider"></div>
+                    <div class="metric">
+                        <div class="metric-value"><span data-target="99">0</span>%</div>
+                        <div class="metric-label">Success Rate</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="hero-visual">
+                <div class="floating-shapes">
+                    <div class="shape shape-1"></div>
+                    <div class="shape shape-2"></div>
+                    <div class="shape shape-3"></div>
+                    <div class="shape shape-4"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Main Generation Interface -->
+        <main class="main-content" id="create">
+            <div class="generation-interface">
+                <!-- Input Section -->
+                <section class="input-section">
+                    <div class="section-header">
+                        <h2 class="section-title">
+                            <span class="title-icon">✨</span>
+                            Create Your Design
+                        </h2>
+                        <div class="section-actions">
+                            <button class="icon-btn" id="clearAll" title="Clear all">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="3 6 5 6 21 6"/>
+                                    <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Quick Templates -->
+                    <div class="templates-section">
+                        <h3 class="subsection-title">Quick Start Templates</h3>
+                        <div class="template-grid">
+                            <button class="template-card" data-template="modern tech startup logo">
+                                <div class="template-icon">🚀</div>
+                                <span>Tech Logo</span>
+                            </button>
+                            <button class="template-card" data-template="abstract geometric pattern">
+                                <div class="template-icon">💎</div>
+                                <span>Geometric</span>
+                            </button>
+                            <button class="template-card" data-template="nature inspired organic design">
+                                <div class="template-icon">🌿</div>
+                                <span>Nature</span>
+                            </button>
+                            <button class="template-card" data-template="minimalist icon design">
+                                <div class="template-icon">⚡</div>
+                                <span>Icon</span>
+                            </button>
+                            <button class="template-card" data-template="retro badge design">
+                                <div class="template-icon">🏆</div>
+                                <span>Badge</span>
+                            </button>
+                            <button class="template-card" data-template="playful character illustration">
+                                <div class="template-icon">🎨</div>
+                                <span>Character</span>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Main Input Form -->
+                    <form class="generation-form" id="generationForm">
+                        <div class="form-field">
+                            <label class="field-label">Describe Your Vision</label>
+                            <div class="input-wrapper">
+                                <textarea 
+                                    class="prompt-textarea"
+                                    id="promptInput"
+                                    placeholder="A modern minimalist logo featuring interconnected hexagons in gradient purple..."
+                                    rows="4"
+                                    maxlength="800"
+                                ></textarea>
+                                <div class="input-tools">
+                                    <span class="char-counter" id="charCounter">0 / 800</span>
+                                    <button type="button" class="tool-btn" id="enhanceBtn" title="AI Enhance">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                                        </svg>
+                                        <span>Enhance</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="form-row">
+                            <div class="form-field">
+                                <label class="field-label">Style Preset</label>
+                                <select class="form-select" id="styleSelect">
+                                    <option value="auto">Auto-detect</option>
+                                    <option value="minimal">Minimalist</option>
+                                    <option value="geometric">Geometric</option>
+                                    <option value="organic">Organic</option>
+                                    <option value="technical">Technical</option>
+                                    <option value="playful">Playful</option>
+                                    <option value="logo">Logo Design</option>
+                                </select>
+                            </div>
+                            
+                            <div class="form-field">
+                                <label class="field-label">Complexity</label>
+                                <select class="form-select" id="complexitySelect">
+                                    <option value="simple">Simple</option>
+                                    <option value="moderate" selected>Moderate</option>
+                                    <option value="detailed">Detailed</option>
+                                </select>
+                            </div>
+                            
+                            <div class="form-field">
+                                <label class="field-label">Color Mode</label>
+                                <select class="form-select" id="colorSelect">
+                                    <option value="auto">Auto</option>
+                                    <option value="vibrant">Vibrant</option>
+                                    <option value="pastel">Pastel</option>
+                                    <option value="monochrome">Monochrome</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div class="form-actions">
+                            <button type="submit" class="btn btn-primary btn-large" id="generateBtn">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+                                </svg>
+                                <span>Generate Design</span>
+                            </button>
+                            <button type="button" class="btn btn-secondary" id="luckyBtn">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                                    <circle cx="8.5" cy="8.5" r="1.5"/>
+                                    <circle cx="15.5" cy="8.5" r="1.5"/>
+                                    <circle cx="12" cy="15.5" r="1.5"/>
+                                </svg>
+                                <span>Surprise Me</span>
+                            </button>
+                        </div>
+                    </form>
+                </section>
+
+                <!-- Output Section -->
+                <section class="output-section">
+                    <!-- Loading State -->
+                    <div class="generation-loading" id="loadingState">
+                        <div class="loading-spinner">
+                            <div class="spinner-ring"></div>
+                            <div class="spinner-ring"></div>
+                            <div class="spinner-ring"></div>
+                        </div>
+                        <h3 class="loading-title">Creating Your Design</h3>
+                        <p class="loading-status" id="loadingStatus">Analyzing prompt...</p>
+                        <div class="progress-track">
+                            <div class="progress-fill" id="progressFill"></div>
+                        </div>
+                    </div>
+                    
+                    <!-- Result Display -->
+                    <div class="generation-result" id="resultDisplay">
+                        <div class="result-toolbar">
+                            <h3 class="result-title">Generated Design</h3>
+                            <div class="toolbar-actions">
+                                <button class="toolbar-btn" id="downloadSvg" title="Download SVG">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                                        <polyline points="7 10 12 15 17 10"/>
+                                        <line x1="12" y1="15" x2="12" y2="3"/>
+                                    </svg>
+                                </button>
+                                <button class="toolbar-btn" id="copyCode" title="Copy Code">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                                        <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
+                                    </svg>
+                                </button>
+                                <button class="toolbar-btn" id="editDesign" title="Edit Design">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+                                        <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                                    </svg>
+                                </button>
+                                <button class="toolbar-btn" id="regenerateBtn" title="Regenerate">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <polyline points="23 4 23 10 17 10"/>
+                                        <path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="svg-display" id="svgDisplay">
+                            <div class="svg-container" id="svgContainer"></div>
+                            <div class="svg-background-toggle">
+                                <button class="bg-option active" data-bg="checkers"></button>
+                                <button class="bg-option" data-bg="white"></button>
+                                <button class="bg-option" data-bg="dark"></button>
+                                <button class="bg-option" data-bg="gradient"></button>
+                            </div>
+                        </div>
+                        
+                        <div class="result-details">
+                            <div class="detail-tabs">
+                                <button class="tab-btn active" data-tab="info">Info</button>
+                                <button class="tab-btn" data-tab="code">Code</button>
+                                <button class="tab-btn" data-tab="colors">Colors</button>
+                                <button class="tab-btn" data-tab="export">Export</button>
+                            </div>
+                            
+                            <div class="tab-panels">
+                                <div class="tab-panel active" id="infoTab">
+                                    <div class="info-grid">
+                                        <div class="info-item">
+                                            <span class="info-label">Generation Time</span>
+                                            <span class="info-value" id="genTime">—</span>
+                                        </div>
+                                        <div class="info-item">
+                                            <span class="info-label">Style</span>
+                                            <span class="info-value" id="genStyle">—</span>
+                                        </div>
+                                        <div class="info-item">
+                                            <span class="info-label">Quality Score</span>
+                                            <span class="info-value" id="qualityScore">—</span>
+                                        </div>
+                                        <div class="info-item">
+                                            <span class="info-label">File Size</span>
+                                            <span class="info-value" id="fileSize">—</span>
+                                        </div>
+                                    </div>
+                                    <div class="prompt-display">
+                                        <div class="prompt-item">
+                                            <span class="prompt-label">Original Prompt</span>
+                                            <p class="prompt-text" id="originalPrompt">—</p>
+                                        </div>
+                                        <div class="prompt-item">
+                                            <span class="prompt-label">Enhanced Prompt</span>
+                                            <p class="prompt-text" id="enhancedPrompt">—</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="tab-panel" id="codeTab">
+                                    <div class="code-editor">
+                                        <div class="code-header">
+                                            <span>SVG Code</span>
+                                            <button class="copy-btn" id="copyCodeBtn">Copy</button>
+                                        </div>
+                                        <pre class="code-content"><code id="svgCode"><!-- SVG code will appear here --></code></pre>
+                                    </div>
+                                </div>
+                                
+                                <div class="tab-panel" id="colorsTab">
+                                    <div class="color-palette" id="colorPalette">
+                                        <!-- Color swatches will be generated here -->
+                                    </div>
+                                </div>
+                                
+                                <div class="tab-panel" id="exportTab">
+                                    <div class="export-options">
+                                        <button class="export-btn" data-format="svg">
+                                            <span class="export-icon">📄</span>
+                                            <span>SVG Vector</span>
+                                            <span class="export-desc">Scalable, editable</span>
+                                        </button>
+                                        <button class="export-btn" data-format="png">
+                                            <span class="export-icon">🖼️</span>
+                                            <span>PNG Image</span>
+                                            <span class="export-desc">High resolution</span>
+                                        </button>
+                                        <button class="export-btn" data-format="pdf">
+                                            <span class="export-icon">📑</span>
+                                            <span>PDF Document</span>
+                                            <span class="export-desc">Print ready</span>
+                                        </button>
+                                        <button class="export-btn" data-format="react">
+                                            <span class="export-icon">⚛️</span>
+                                            <span>React Component</span>
+                                            <span class="export-desc">Ready to use</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Empty State -->
+                    <div class="empty-state" id="emptyState">
+                        <div class="empty-illustration">
+                            <svg viewBox="0 0 200 200" fill="none">
+                                <rect x="50" y="50" width="100" height="100" rx="20" stroke="currentColor" stroke-width="2" opacity="0.2"/>
+                                <circle cx="75" cy="75" r="8" fill="currentColor" opacity="0.2"/>
+                                <path d="M50 120L80 90L110 120L150 80" stroke="currentColor" stroke-width="2" opacity="0.2"/>
+                            </svg>
+                        </div>
+                        <h3 class="empty-title">Ready to Create</h3>
+                        <p class="empty-text">Your AI-generated vector design will appear here</p>
+                    </div>
+                </section>
+            </div>
+        </main>
+
+        <!-- Recent Creations -->
+        <section class="recent-section" id="gallery">
+            <div class="section-container">
+                <div class="section-header">
+                    <h2 class="section-title">
+                        <span class="title-icon">🎨</span>
+                        Recent Creations
+                    </h2>
+                    <button class="text-btn" id="clearHistory">Clear History</button>
+                </div>
+                
+                <div class="creations-slider" id="creationsSlider">
+                    <div class="slider-track" id="historyTrack">
+                        <!-- History items will be generated here -->
+                    </div>
+                </div>
+                
+                <div class="empty-history" id="emptyHistory">
+                    <p>Your creation history will appear here</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Footer -->
+        <footer class="app-footer">
+            <div class="footer-content">
+                <div class="footer-section">
+                    <div class="footer-logo">
+                        <div class="logo-icon small">
+                            <svg viewBox="0 0 32 32" fill="none">
+                                <path d="M16 2L28 8V16L16 22L4 16V8L16 2Z" stroke="currentColor" stroke-width="2"/>
+                                <path d="M16 22V30" stroke="currentColor" stroke-width="2"/>
+                            </svg>
+                        </div>
+                        <span>Vectoria.ai</span>
+                    </div>
+                    <p class="footer-desc">Next-generation AI-powered vector generation platform</p>
+                </div>
+                
+                <div class="footer-section">
+                    <h4 class="footer-title">Product</h4>
+                    <ul class="footer-links">
+                        <li><a href="#features">Features</a></li>
+                        <li><a href="#pricing">Pricing</a></li>
+                        <li><a href="#api">API Access</a></li>
+                        <li><a href="#changelog">Changelog</a></li>
+                    </ul>
+                </div>
+                
+                <div class="footer-section">
+                    <h4 class="footer-title">Resources</h4>
+                    <ul class="footer-links">
+                        <li><a href="#docs">Documentation</a></li>
+                        <li><a href="#tutorials">Tutorials</a></li>
+                        <li><a href="#blog">Blog</a></li>
+                        <li><a href="#support">Support</a></li>
+                    </ul>
+                </div>
+                
+                <div class="footer-section">
+                    <h4 class="footer-title">Connect</h4>
+                    <div class="social-links">
+                        <a href="#" class="social-link" aria-label="Twitter">
+                            <svg viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M23 3a10.9 10.9 0 01-3.14 1.53 4.48 4.48 0 00-7.86 3v1A10.66 10.66 0 013 4s-4 9 5 13a11.64 11.64 0 01-7 2c9 5 20 0 20-11.5a4.5 4.5 0 00-.08-.83A7.72 7.72 0 0023 3z"/>
+                            </svg>
+                        </a>
+                        <a href="#" class="social-link" aria-label="GitHub">
+                            <svg viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 00-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0020 4.77 5.07 5.07 0 0019.91 1S18.73.65 16 2.48a13.38 13.38 0 00-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 005 4.77a5.44 5.44 0 00-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 009 18.13V22"/>
+                            </svg>
+                        </a>
+                        <a href="#" class="social-link" aria-label="Discord">
+                            <svg viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M20.317 4.37a19.791 19.791 0 00-4.885-1.515.074.074 0 00-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 00-5.487 0 12.64 12.64 0 00-.617-1.25.077.077 0 00-.079-.037A19.736 19.736 0 003.677 4.37a.07.07 0 00-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 00.031.057 19.9 19.9 0 005.993 3.03.078.078 0 00.084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 00-.041-.106 13.107 13.107 0 01-1.872-.892.077.077 0 01-.008-.128 10.2 10.2 0 00.372-.292.074.074 0 01.077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 01.078.01c.12.098.246.198.373.292a.077.077 0 01-.006.127 12.299 12.299 0 01-1.873.892.077.077 0 00-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 00.084.028 19.839 19.839 0 006.002-3.03.077.077 0 00.032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 00-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/>
+                            </svg>
+                        </a>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="footer-bottom">
+                <p>&copy; 2024 Vectoria.ai. All rights reserved.</p>
+                <div class="footer-bottom-links">
+                    <a href="#privacy">Privacy Policy</a>
+                    <a href="#terms">Terms of Service</a>
+                    <a href="#cookies">Cookie Policy</a>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <!-- Toast Notifications Container -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- Mobile Navigation Menu -->
+    <div class="mobile-nav" id="mobileNav">
+        <div class="mobile-nav-content">
+            <a href="#create" class="mobile-nav-link">Create</a>
+            <a href="#gallery" class="mobile-nav-link">Gallery</a>
+            <a href="#pricing" class="mobile-nav-link">Pricing</a>
+            <a href="#api" class="mobile-nav-link">API</a>
+            <a href="#docs" class="mobile-nav-link">Documentation</a>
+            <a href="#support" class="mobile-nav-link">Support</a>
+        </div>
+    </div>
+
+    <!-- Keyboard Shortcuts Modal -->
+    <div class="modal" id="shortcutsModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Keyboard Shortcuts</h3>
+                <button class="modal-close" id="closeShortcuts">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="shortcut-item">
+                    <kbd>Ctrl</kbd> + <kbd>Enter</kbd>
+                    <span>Generate design</span>
+                </div>
+                <div class="shortcut-item">
+                    <kbd>Ctrl</kbd> + <kbd>K</kbd>
+                    <span>Focus prompt input</span>
+                </div>
+                <div class="shortcut-item">
+                    <kbd>Ctrl</kbd> + <kbd>D</kbd>
+                    <span>Download SVG</span>
+                </div>
+                <div class="shortcut-item">
+                    <kbd>Ctrl</kbd> + <kbd>C</kbd>
+                    <span>Copy SVG code</span>
+                </div>
+                <div class="shortcut-item">
+                    <kbd>Esc</kbd>
+                    <span>Cancel generation</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
