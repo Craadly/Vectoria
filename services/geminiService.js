@@ -1,631 +1,454 @@
-// services/imagenService.js
+// services/geminiService.js
 'use strict';
 
 /**
- * Enhanced Imagen service with super intelligence for SVG-optimized raster generation.
- * Produces images specifically designed for high-quality vectorization.
+ * Enhanced Gemini service with super intelligence for SVG generation.
+ * Features advanced prompt engineering, style understanding, and intelligent fallbacks.
+ * NOW WITH DUAL GENERATION MODES: 'vector' for clean icons and 'artistic' for rich illustrations.
+ * NEW: The AI now has full creative freedom to choose the color palette.
  */
 
-const http = require('http');
-const https = require('https');
-const axios = require('axios');
-const { GoogleAuth } = require('google-auth-library');
-const fs = require('fs');
-const fsp = fs.promises;
-const path = require('path');
-const sharp = require('sharp'); // Add this to package.json if not present
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 const config = require('../config/env');
+const fs = require('fs').promises;
+const path = require('path');
+const crypto = require('crypto');
 
-// ---------- Enhanced Tunables ----------
-const DEFAULT_TIMEOUT_MS = Number(process.env.IMAGEN_HTTP_TIMEOUT_MS || 60_000);
-const USER_AGENT = process.env.IMAGEN_USER_AGENT || 'Craadly-Vectoria/2.0-Enhanced';
+// ---- Config validation ------------------------------------------------------
+if (!config?.GEMINI_API_KEY) {
+  throw new Error('GEMINI_API_KEY is missing in config.');
+}
+if (!config?.GEMINI_MODEL_ID) {
+  throw new Error('GEMINI_MODEL_ID is missing in config.');
+}
+if (!config?.TEMP_DIR) {
+  throw new Error('TEMP_DIR is missing in config.');
+}
 
-// SVG-optimized generation parameters
-const SVG_OPTIMIZATION_PROFILES = {
-  logo: {
-    aspectRatio: '1:1',
-    sampleImageSize: '1536', // Higher res for logos
-    styleModifiers: 'corporate, professional, scalable, iconic',
-    negativePrompt: 'complex textures, photorealistic, 3d render, gradients, shadows, busy background, noise, grain, blur, soft edges, watermark, text, realistic lighting, depth of field, bokeh',
-    postProcessing: {
-      contrast: 1.3,
-      brightness: 1.1,
-      sharpen: true,
-      simplify: true
-    }
-  },
+const genAI = new GoogleGenerativeAI(config.GEMINI_API_KEY);
+
+// Optional SVGO (auto-used if installed)
+let svgoOptimize = null;
+try {
+  svgoOptimize = require('svgo').optimize;
+} catch { /* optional */ }
+
+// ---- Tunables ---------------------------------------------------------------
+const DEFAULT_TIMEOUT_MS = 25_000;
+const MAX_RETRIES = 3;
+const RETRY_BASE_MS = 800;
+const MAX_PROMPT_WORDS = 200;
+const MAX_SVG_BYTES = 500 * 1024;
+const DEFAULT_OUTPUT_TOKENS = 300;
+const SVG_OUTPUT_TOKENS = 2000;
+
+// ---- Style Intelligence System ----------------------------------------------
+const STYLE_PROFILES = {
   minimal: {
-    aspectRatio: '1:1',
-    sampleImageSize: '1024',
-    styleModifiers: 'ultra minimalist, few elements, high contrast, clean edges',
-    negativePrompt: 'complex, detailed, textured, gradient, shadow, 3d, photorealistic, busy, cluttered, ornate, decorative, realistic, soft edges',
-    postProcessing: {
-      contrast: 1.5,
-      brightness: 1.2,
-      sharpen: true,
-      threshold: 180
+    keywords: ['minimalist', 'simple', 'clean', 'basic'],
+    attributes: {
+      shapes: ['circles', 'rectangles', 'simple polygons'],
+      colors: '2-3 solid colors maximum',
+      complexity: 'very low',
+      details: 'essential elements only'
     }
   },
   geometric: {
-    aspectRatio: '1:1',
-    sampleImageSize: '1536',
-    styleModifiers: 'precise geometric shapes, mathematical, angular, symmetrical',
-    negativePrompt: 'organic, curved, natural, photorealistic, textured, gradient, shadow, 3d render, soft, blurry, imprecise',
-    postProcessing: {
-      contrast: 1.4,
-      sharpen: true,
-      edgeEnhance: true
-    }
-  },
-  character: {
-    aspectRatio: '1:1',
-    sampleImageSize: '1536',
-    styleModifiers: 'cartoon character, bold outlines, simple shapes, flat colors',
-    negativePrompt: 'realistic, photographic, 3d render, complex shading, gradient, texture, detailed features, realistic proportions, soft edges',
-    postProcessing: {
-      contrast: 1.3,
-      saturation: 1.2,
-      sharpen: true,
-      smoothing: true
-    }
-  },
-  technical: {
-    aspectRatio: '1:1',
-    sampleImageSize: '2048', // Maximum precision for technical
-    styleModifiers: 'technical drawing, blueprint style, precise lines, schematic',
-    negativePrompt: 'artistic, painterly, photorealistic, textured, gradient, shadow, 3d, perspective, soft edges, blur',
-    postProcessing: {
-      contrast: 1.6,
-      monochrome: true,
-      sharpen: true,
-      edgeEnhance: true
+    keywords: ['geometric', 'abstract', 'modern', 'angular'],
+    attributes: {
+      shapes: ['triangles', 'hexagons', 'complex polygons', 'intersecting shapes'],
+      colors: '3-5 bold contrasting colors',
+      complexity: 'medium',
+      details: 'pattern-based, symmetrical'
     }
   },
   organic: {
-    aspectRatio: '1:1',
-    sampleImageSize: '1536',
-    styleModifiers: 'smooth curves, flowing shapes, natural forms, simplified',
-    negativePrompt: 'photorealistic, detailed texture, complex, gradient, shadow, 3d render, busy, cluttered, geometric, angular',
-    postProcessing: {
-      contrast: 1.2,
-      smoothing: true,
-      simplify: true
+    keywords: ['natural', 'flowing', 'curved', 'organic'],
+    attributes: {
+      shapes: ['bezier curves', 'smooth paths', 'ellipses'],
+      colors: 'earth tones or nature-inspired palette',
+      complexity: 'medium to high',
+      details: 'smooth transitions, natural forms'
     }
   },
-  default: {
-    aspectRatio: '1:1',
-    sampleImageSize: '1536',
-    styleModifiers: 'vector-ready, high contrast, clear shapes, simple',
-    negativePrompt: 'photorealistic, 3d render, gradient, shadow, texture, complex background, photograph, realistic, detailed textures, noise, grain, blur, soft edges, watermark, text',
-    postProcessing: {
-      contrast: 1.3,
-      brightness: 1.05,
-      sharpen: true
+  playful: {
+    keywords: ['fun', 'cartoon', 'playful', 'whimsical', 'mascot', 'character'],
+    attributes: {
+      shapes: ['rounded rectangles', 'circles', 'blob shapes'],
+      colors: 'bright, vibrant',
+      complexity: 'medium',
+      details: 'friendly, approachable'
+    }
+  },
+  technical: {
+    keywords: ['technical', 'blueprint', 'schematic', 'diagram'],
+    attributes: {
+      shapes: ['precise lines', 'grids', 'technical symbols'],
+      colors: 'monochrome or limited technical palette',
+      complexity: 'high precision',
+      details: 'accurate proportions'
+    }
+  },
+  logo: {
+    keywords: ['logo', 'brand', 'identity', 'symbol', 'mark'],
+    attributes: {
+      shapes: ['memorable forms', 'scalable elements'],
+      colors: '1-3 colors, high contrast',
+      complexity: 'simple but distinctive',
+      details: 'balanced, works at any size'
     }
   }
 };
 
-// Color analysis for better vectorization
-const COLOR_COMPLEXITY_LIMITS = {
-  simple: 4,    // 2-4 colors
-  moderate: 8,  // 5-8 colors
-  complex: 16   // 9-16 colors
+// Enhanced subject understanding
+const SUBJECT_ENHANCEMENTS = {
+  animals: {
+    keywords: ['animal', 'pet', 'creature', 'beast'],
+    enhance: (animal) => `stylized ${animal} with characteristic features emphasized`,
+    svgTips: 'Use smooth curves for body, geometric shapes for features'
+  },
+  people: {
+    keywords: ['person', 'human', 'character', 'avatar', 'user'],
+    enhance: () => 'simplified human figure with distinctive silhouette',
+    svgTips: 'Circle for head, rounded rectangles for body parts'
+  },
+  technology: {
+    keywords: ['tech', 'computer', 'device', 'digital', 'cyber', 'ai'],
+    enhance: (tech) => `${tech} with clean lines, circuit patterns, or digital motifs`,
+    svgTips: 'Use rectangles, straight lines, grid patterns'
+  },
+  nature: {
+    keywords: ['tree', 'plant', 'flower', 'mountain', 'sun', 'cloud'],
+    enhance: (nature) => `stylized ${nature} with simplified organic forms`,
+    svgTips: 'Use bezier curves for organic shapes, polygons for mountains'
+  },
+  abstract: {
+    keywords: ['abstract', 'concept', 'idea', 'emotion'],
+    enhance: (concept) => `abstract representation of ${concept} using shapes and colors`,
+    svgTips: 'Combine basic shapes creatively'
+  }
 };
 
-// ---------- Connection pooling ----------
-const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 10 });
-const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 10 });
+// ---- Advanced Helper Functions ----------------------------------------------
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const jitter = (base) => base * (0.8 + Math.random() * 0.4);
 
-const axiosInstance = axios.create({
-  timeout: DEFAULT_TIMEOUT_MS,
-  httpAgent,
-  httpsAgent,
-  maxRedirects: 5,
-  headers: { 'User-Agent': USER_AGENT },
-  validateStatus: (s) => s >= 200 && s < 300,
-});
-
-// ---------- Google Auth ----------
-let googleAuthClient = null;
-let initPromise = null;
-
-async function initializeGoogleAuth() {
-  if (googleAuthClient) return googleAuthClient;
-  if (initPromise) return initPromise;
-
-  initPromise = (async () => {
-    try {
-      console.log('🔐 Initializing Google Auth for Imagen...');
-      const keyFilePath = path.join(__dirname, '..', 'service-account-key.json');
-
-      if (!fs.existsSync(keyFilePath)) {
-        console.error(`❌ FATAL: Credentials file not found at: ${keyFilePath}`);
-        return null;
-      }
-
-      const auth = new GoogleAuth({
-        keyFilename: keyFilePath,
-        scopes: ['https://www.googleapis.com/auth/cloud-platform'],
-      });
-
-      googleAuthClient = await auth.getClient();
-      console.log('✅ Google Auth initialized successfully.');
-      return googleAuthClient;
-    } catch (error) {
-      console.error('❌ Google Auth initialization error:', error.message);
-      googleAuthClient = null;
-      return null;
-    }
-  })();
-
-  return initPromise;
-}
-
-function isGoogleAuthInitialized() {
-  return !!googleAuthClient;
-}
-
-// ---------- Enhanced Helper Functions ----------
-
-/**
- * Detect the style from the enhanced prompt to choose optimization profile
- */
-function detectStyleFromPrompt(prompt) {
+function detectStyle(prompt) {
   const lower = prompt.toLowerCase();
-
-  // Check for specific style indicators
-  if (lower.includes('logo') || lower.includes('brand') || lower.includes('symbol')) {
-    return 'logo';
+  for (const [style, profile] of Object.entries(STYLE_PROFILES)) {
+    if (profile.keywords.some(k => lower.includes(k))) {
+      return style;
+    }
   }
-  if (lower.includes('minimal') || lower.includes('simple') || lower.includes('clean')) {
-    return 'minimal';
-  }
-  if (lower.includes('geometric') || lower.includes('angular') || lower.includes('polygon')) {
-    return 'geometric';
-  }
-  if (lower.includes('character') || lower.includes('mascot') || lower.includes('cartoon')) {
-    return 'character';
-  }
-  if (lower.includes('technical') || lower.includes('blueprint') || lower.includes('schematic')) {
-    return 'technical';
-  }
-  if (lower.includes('organic') || lower.includes('flowing') || lower.includes('natural')) {
-    return 'organic';
-  }
-
-  return 'default';
+  if (lower.includes('logo') || lower.includes('brand')) return 'logo';
+  if (lower.includes('character') || lower.includes('mascot')) return 'playful';
+  return 'geometric';
 }
 
-/**
- * Enhance prompt specifically for better vectorization results
- * FIXED: Renamed to enhancePrompt to match the function call causing the error.
- */
-function enhancePrompt(prompt, style) {
-  const profile = SVG_OPTIMIZATION_PROFILES[style];
-
-  // Add style-specific modifiers
-  let enhanced = prompt;
-  if (!enhanced.includes(profile.styleModifiers)) {
-    enhanced = `${prompt}, ${profile.styleModifiers}`;
+function detectSubject(prompt) {
+  const lower = prompt.toLowerCase();
+  for (const [category, data] of Object.entries(SUBJECT_ENHANCEMENTS)) {
+    if (data.keywords.some(k => lower.includes(k))) {
+      return category;
+    }
   }
+  return 'abstract';
+}
 
-  // Add vectorization-friendly keywords
-  const vectorKeywords = [
-    'clear boundaries',
-    'distinct shapes',
-    'solid colors',
-    'high contrast',
-    'centered composition',
-    'white background',
-    'no ambiguous edges'
-  ];
-
-  // Add keywords that aren't already present
-  const missingKeywords = vectorKeywords.filter(keyword =>
-    !enhanced.toLowerCase().includes(keyword.toLowerCase())
-  );
-
-  if (missingKeywords.length > 0) {
-    enhanced += ', ' + missingKeywords.join(', ');
+function buildIntelligentPrompt(userPrompt, generationMode = 'vector') {
+  const style = detectStyle(userPrompt);
+  const subject = detectSubject(userPrompt);
+  const styleProfile = STYLE_PROFILES[style];
+  const subjectData = SUBJECT_ENHANCEMENTS[subject];
+  
+  const mainConcept = userPrompt.replace(/\b(logo|icon|illustration|design|svg|vector)\b/gi, '').trim();
+  
+  let enhanced = '';
+  
+  const isArtisticSubject = ['animals', 'people', 'nature'].includes(subject);
+  if (generationMode === 'vector' && isArtisticSubject) {
+    enhanced = `Create a bold, geometric brand mark for the concept '${mainConcept}'. The style must be strictly ${style}. Use only these shapes: ${styleProfile.attributes.shapes.join(', ')}. The final output must be a simple, flat, 2D logo suitable for a modern tech company. No artistic elements.`;
+  } else {
+    let baseEnhancement = mainConcept;
+    if (subjectData && subjectData.enhance) {
+      baseEnhancement = subjectData.enhance(mainConcept);
+    }
+    enhanced = `${baseEnhancement}, in a ${style} style, focusing on ${styleProfile.attributes.details}.`;
   }
+  
+  if (generationMode === 'artistic') {
+    enhanced += ` Create a visually rich illustration using a vibrant and professional color palette chosen by the AI. Use subtle gradients for depth. Complex shapes and bezier curves are encouraged for high detail. The composition should be centered on a solid white background.`;
+  } else {
+    enhanced += ` The design must be a flat vector illustration using a harmonious and modern color palette chosen by the AI. Ensure the composition is perfectly centered with balanced negative space. It must be a scalable design with a solid white background. Absolutely no gradients, no shadows, no textures, and no photorealistic details.`;
+  }
+  
+  return {
+    enhanced,
+    metadata: { style, subject, styleProfile, subjectData, generationMode }
+  };
+}
 
+
+function stripCodeFencesAndQuotes(text) {
+  let t = String(text || '').trim();
+  t = t.replace(/```(?:svg|xml|html)?\s*([\s\S]*?)```/gi, '$1').trim();
+  t = t.replace(/^`+|`+$/g, '').trim();
+  t = t.replace(/^"+|"+$/g, '').trim();
+  t = t.replace(/^'+|'+$/g, '').trim();
+  t = t.replace(/^\s*(enhanced\s*prompt|prompt)\s*:\s*/i, '').trim();
+  return t;
+}
+
+function clampWords(str, maxWords) {
+  const words = String(str || '').trim().split(/\s+/);
+  return words.length <= maxWords ? String(str || '').trim() : words.slice(0, maxWords).join(' ');
+}
+
+function extractSvgFromText(text) {
+  const m = String(text || '').match(/<svg[\s\S]*?<\/svg>/i);
+  return m ? m[0] : null;
+}
+
+function enhanceSvgCode(svg, metadata) {
+  let enhanced = String(svg || '');
+  if (!/viewBox\s*=/.test(enhanced)) {
+    enhanced = enhanced.replace(/<svg/i, '<svg viewBox="0 0 100 100"');
+  }
+  if (!/xmlns\s*=/.test(enhanced)) {
+    enhanced = enhanced.replace(/<svg/i, '<svg xmlns="http://www.w3.org/2000/svg"');
+  }
+  if (!/<rect.*width="100".*height="100"/i.test(enhanced)) {
+    const bgRect = '<rect width="100" height="100" fill="white"/>';
+    enhanced = enhanced.replace(/(<svg[^>]*>)/i, `$1\n  ${bgRect}\n`);
+  }
+  if (metadata && !/<title>/i.test(enhanced)) {
+    const title = `<title>${metadata.style} ${metadata.subject} design</title>`;
+    const desc = `<desc>A ${metadata.style} style vector illustration</desc>`;
+    enhanced = enhanced.replace(/(<svg[^>]*>)/i, `$1\n  ${title}\n  ${desc}\n`);
+  }
   return enhanced;
 }
 
-/**
- * Post-process image for optimal vectorization using sharp
- */
-async function postProcessForVectorization(imageBuffer, style) {
-  try {
-    // Skip if sharp is not available
-    if (!sharp) {
-      console.log('⚠️ Sharp not available, skipping post-processing');
-      return imageBuffer;
-    }
-
-    const profile = SVG_OPTIMIZATION_PROFILES[style];
-    const processing = profile.postProcessing;
-
-    let image = sharp(imageBuffer);
-
-    // Get image metadata
-    const metadata = await image.metadata();
-    console.log(`📊 Processing ${metadata.width}x${metadata.height} image for style: ${style}`);
-
-    // Apply contrast and brightness adjustments
-    if (processing.contrast || processing.brightness) {
-      image = image.modulate({
-        brightness: processing.brightness || 1,
-        saturation: processing.saturation || 1
-      });
-    }
-
-    // Apply sharpening for better edges
-    if (processing.sharpen) {
-      image = image.sharpen({
-        sigma: 1.5,
-        m1: 1.0,
-        m2: 0.5
-      });
-    }
-
-    // Edge enhancement for geometric styles
-    if (processing.edgeEnhance) {
-      image = image.convolve({
-        width: 3,
-        height: 3,
-        kernel: [-1, -1, -1, -1, 9, -1, -1, -1, -1] // Edge enhancement kernel
-      });
-    }
-
-    // Convert to monochrome for technical drawings
-    if (processing.monochrome) {
-      image = image.greyscale();
-      if (processing.threshold) {
-        image = image.threshold(processing.threshold);
-      }
-    }
-
-    // Reduce colors for simpler vectorization
-    if (processing.simplify) {
-      // Posterize effect - reduce color depth
-      image = image.png({
-        colors: style === 'minimal' ? 8 : 16,
-        dither: false
-      });
-    }
-
-    // Apply smoothing for character/organic styles
-    if (processing.smoothing) {
-      image = image.median(3); // 3x3 median filter for smoothing
-    }
-
-    // Ensure high quality output
-    const processedBuffer = await image
-      .png({
-        compressionLevel: 0, // No compression for quality
-        adaptiveFiltering: false,
-        palette: false
-      })
-      .toBuffer();
-
-    console.log(`✅ Post-processing complete for ${style} style`);
-    return processedBuffer;
-
-  } catch (error) {
-    console.warn('⚠️ Post-processing failed, using original:', error.message);
-    return imageBuffer;
+function sanitizeSvg(svg, generationMode = 'vector') {
+  let s = String(svg || '');
+  s = s.replace(/<script[\s\S]*?<\/script>/gi, '');
+  s = s.replace(/\son[a-z]+\s*=\s*(['"]).*?\1/gi, '');
+  s = s.replace(/(?:xlink:)?href\s*=\s*(['"])javascript:[\s\S]*?\1/gi, '');
+  s = s.replace(/<foreignObject[\s\S]*?<\/foreignObject>/gi, '');
+  s = s.replace(/<iframe[\s\S]*?<\/iframe>/gi, '');
+  
+  if (generationMode === 'vector') {
+    s = s.replace(/<filter[\s\S]*?<\/filter>/gi, '');
+    s = s.replace(/<linearGradient[\s\S]*?<\/linearGradient>/gi, '');
+    s = s.replace(/<radialGradient[\s\S]*?<\/radialGradient>/gi, '');
+    s = s.replace(/filter\s*=\s*(['"]).*?\1/gi, '');
+    s = s.replace(/opacity\s*=\s*(['"])0\.\d+\1/gi, '');
+    s = s.replace(/filter\s*:\s*[^;}"']*/gi, '');
+    s = s.replace(/box-shadow\s*:\s*[^;}"']*/gi, '');
+    s = s.replace(/text-shadow\s*:\s*[^;}"']*/gi, '');
   }
+  
+  return s.trim();
 }
 
-/**
- * Analyze image for vectorization readiness
- */
-async function analyzeVectorizationReadiness(imageBuffer) {
+async function maybeOptimizeSvg(svg) {
+  if (!svgoOptimize) return svg;
   try {
-    if (!sharp) return { ready: true, score: 0.5, suggestions: [] };
-
-    const image = sharp(imageBuffer);
-    const { entropy, sharpness } = await image.stats();
-    const metadata = await image.metadata();
-
-    const analysis = {
-      ready: true,
-      score: 1.0,
-      suggestions: [],
-      metrics: {
-        entropy: entropy,
-        sharpness: sharpness,
-        dimensions: `${metadata.width}x${metadata.height}`,
-        format: metadata.format
-      }
-    };
-
-    // Check entropy (complexity)
-    if (entropy > 7) {
-      analysis.score -= 0.3;
-      analysis.suggestions.push('Image may be too complex for clean vectorization');
-    }
-
-    // Check sharpness
-    if (sharpness < 0.5) {
-      analysis.score -= 0.2;
-      analysis.suggestions.push('Image edges may be too soft');
-    }
-
-    // Check dimensions
-    if (metadata.width < 512 || metadata.height < 512) {
-      analysis.score -= 0.1;
-      analysis.suggestions.push('Higher resolution recommended for better vectorization');
-    }
-
-    analysis.ready = analysis.score > 0.3;
-
-    return analysis;
-  } catch (error) {
-    console.warn('⚠️ Could not analyze image:', error.message);
-    return { ready: true, score: 0.5, suggestions: [] };
+    const { data } = svgoOptimize(svg, {
+      multipass: true,
+      plugins: [
+        'preset-default',
+        { name: 'removeDimensions', active: true },
+        { name: 'removeScripts', active: true },
+        { name: 'convertStyleToAttrs', active: true },
+        { name: 'removeUselessStrokeAndFill', active: false },
+        { name: 'removeViewBox', active: false },
+        { name: 'cleanupIds', active: true },
+        { name: 'collapseGroups', active: true }
+      ],
+    });
+    return data || svg;
+  } catch {
+    return svg;
   }
 }
 
 async function ensureTempDir(dir) {
-  await fsp.mkdir(dir, { recursive: true });
+  await fs.mkdir(dir, { recursive: true });
 }
 
-function buildEndpoint() {
-  if (!config.GOOGLE_PROJECT_ID) {
-    throw new Error('GOOGLE_PROJECT_ID is not configured.');
-  }
-  const loc = config.GOOGLE_LOCATION || 'us-central1';
-  const model = config.IMAGEN_MODEL_ID || 'imagen-4.0-generate-001';
-  return `https://${loc}-aiplatform.googleapis.com/v1/projects/${config.GOOGLE_PROJECT_ID}/locations/${loc}/publishers/google/models/${model}:predict`;
+function uniqueSvgFilename(prefix = 'vector_gemini') {
+  const rand = crypto.randomBytes(6).toString('hex');
+  return `${prefix}_${Date.now()}_${rand}.svg`;
 }
 
-function summarizeAxiosError(err) {
-  const status = err?.response?.status;
-  let data = err?.response?.data;
-  try {
-    if (typeof data === 'string' && /^[\[{"]/.test(data)) data = JSON.parse(data);
-  } catch {}
-  const hint =
-    (data && (data.error?.message || data.message || data.detail)) ||
-    err?.message ||
-    String(err);
-  return { status, hint };
-}
-
-// ---------- Enhanced Public API ----------
-
-/**
- * Generate a PNG raster optimized for SVG vectorization using Google Imagen.
- * @param {string} prompt - The enhanced prompt from geminiService
- * @param {object} [options={}] - Optional parameters for generation
- * @param {string} [options.style] - Detected style for optimization
- * @param {string} [options.aspectRatio] - Aspect ratio
- * @param {number} [options.sampleCount] - Number of images to generate
- * @param {boolean} [options.skipPostProcessing] - Skip post-processing
- * @param {boolean} [options.analyze] - Include vectorization readiness analysis
- * @returns {Promise<{imageUrl, imagePath, imageBuffer, style, analysis?, prompt}>}
- */
-async function generateImage(prompt, options = {}) {
-  if (!prompt || typeof prompt !== 'string') {
-    throw new Error('Prompt is required and must be a string.');
-  }
-
-  // Detect style from prompt if not provided
-  const style = options.style || detectStyleFromPrompt(prompt);
-  const profile = SVG_OPTIMIZATION_PROFILES[style] || SVG_OPTIMIZATION_PROFILES.default;
-
-  console.log(`🎨 Generating image with style profile: ${style}`);
-
-  // Enhance prompt for better vectorization
-  const enhancedPrompt = enhancePrompt(prompt, style); // FIXED: Updated function call
-  console.log(`📝 Enhanced prompt for vectorization: ${enhancedPrompt.substring(0, 100)}...`);
-
-  // Ensure auth is ready
-  const client = await initializeGoogleAuth();
-  if (!client) {
-    throw new Error('Google Auth client failed to initialize. Check service account credentials.');
-  }
-
-  // Obtain Bearer token
-  let token;
-  try {
-    const accessToken = await client.getAccessToken();
-    token = accessToken.token;
-    if (!token) {
-      throw new Error('null token received from Google Auth');
+async function withRetries(fn, { maxRetries = MAX_RETRIES } = {}) {
+  let lastErr;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn(attempt);
+    } catch (err) {
+      lastErr = err;
+      const isLast = attempt === maxRetries;
+      const code = err?.status || err?.code || '';
+      const retryable = [429, 500, 502, 503, 504].includes(Number(code)) || !code;
+      if (!retryable || isLast) break;
+      const delay = Math.min(5000, jitter(RETRY_BASE_MS) * Math.pow(2, attempt));
+      console.log(`Retry attempt ${attempt + 1} after ${delay}ms...`);
+      await sleep(delay);
     }
-  } catch (err) {
-    console.error('❌ Failed to obtain Google access token:', err.message);
-    throw new Error('Could not get Google access token. Check IAM permissions.');
   }
+  throw lastErr;
+}
 
-  const endpoint = buildEndpoint();
-
-  // Build parameters with style-specific optimizations
-  const parameters = {
-    sampleCount: options.sampleCount || 1,
-    aspectRatio: options.aspectRatio || profile.aspectRatio,
-    sampleImageSize: options.sampleImageSize || profile.sampleImageSize,
-    addWatermark: false,
-    negativePrompt: options.negativePrompt || profile.negativePrompt,
-    // Add style-specific parameters
-    guidanceScale: style === 'technical' ? 12 : (style === 'minimal' ? 10 : 7.5),
-    seed: options.seed || Math.floor(Math.random() * 1000000)
-  };
-
-  const requestBody = {
-    instances: [{ prompt: enhancedPrompt }],
-    parameters,
-  };
-
+async function withTimeout(promise, ms = DEFAULT_TIMEOUT_MS, label = 'request') {
+  let to;
   try {
-    console.log(`🚀 Sending request to Imagen API...`);
-    const startTime = Date.now();
-
-    const response = await axiosInstance.post(endpoint, requestBody, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
+    const timeout = new Promise((_, reject) => {
+      to = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
     });
+    return await Promise.race([promise, timeout]);
+  } finally {
+    clearTimeout(to);
+  }
+}
 
-    const prediction = response.data?.predictions?.[0];
-    if (!prediction?.bytesBase64Encoded) {
-      throw new Error('Invalid response from Imagen API (no image data).');
-    }
+// ---- Public API -------------------------------------------------------------
 
-    console.log(`⏱️ Imagen API responded in ${Date.now() - startTime}ms`);
+async function enhancePrompt(userPrompt, options = {}) {
+  const { generationMode = 'vector' } = options;
+  let user = String(userPrompt || '').trim();
+  if (!user) {
+    throw new Error('Empty prompt provided');
+  }
 
-    let imageBuffer = Buffer.from(prediction.bytesBase64Encoded, 'base64');
+  try {
+    const { enhanced: intelligentBase } = buildIntelligentPrompt(user, generationMode);
+    // The intelligent base is now smart enough to be the final prompt.
+    console.log(`[Gemini] Built direct prompt for mode '${generationMode}'`);
+    return clampWords(intelligentBase, MAX_PROMPT_WORDS);
+    
+  } catch (error) {
+    console.error('⚠️ Gemini prompt building failed:', error?.message || error);
+    // Fallback to a very simple prompt if building fails
+    return clampWords(userPrompt, MAX_PROMPT_WORDS);
+  }
+}
 
-    // Post-process for better vectorization unless skipped
-    if (!options.skipPostProcessing) {
-      console.log(`🔧 Applying ${style} post-processing optimizations...`);
-      imageBuffer = await postProcessForVectorization(imageBuffer, style);
-    }
+async function generateFallbackSvg(prompt, options = {}) {
+  const { generationMode = 'vector' } = options;
+  console.log(`🎨 [Gemini SVG] Generating intelligent SVG in '${generationMode}' mode...`);
+  
+  try {
+    const model = genAI.getGenerativeModel({ model: config.GEMINI_MODEL_ID });
+    
+    const { metadata } = buildIntelligentPrompt(prompt, generationMode);
+    const { style, styleProfile } = metadata;
+    
+    const artisticPersona = `You are an expert SVG artist. Your goal is to create a beautiful and detailed SVG illustration.`;
+    const vectorPersona = `You are a LOGO DESIGN AI. Your ONLY function is to create simple, flat, geometric logos. You are incapable of creating artistic illustrations, gradients, or shadows. Your output must be clean, modern, and symbolic.`;
 
-    // Analyze vectorization readiness if requested
-    let analysis = null;
-    if (options.analyze) {
-      console.log(`🔍 Analyzing vectorization readiness...`);
-      analysis = await analyzeVectorizationReadiness(imageBuffer);
-      console.log(`📊 Vectorization score: ${(analysis.score * 100).toFixed(0)}%`);
-      if (analysis.suggestions.length > 0) {
-        console.log(`💡 Suggestions: ${analysis.suggestions.join(', ')}`);
-      }
-    }
+    const artisticConstraints = `
+- Use subtle gradients (<linearGradient>) and filters (<filter>) for depth and texture.
+- Employ complex <path> elements with bezier curves (C, Q commands).
+- Group related elements for a rich composition.`;
 
-    // Save to temp directory
-    await ensureTempDir(config.TEMP_DIR);
-    const fileName = `imagen_${style}_${Date.now()}.png`;
-    const filePath = path.join(config.TEMP_DIR, fileName);
-    await fsp.writeFile(filePath, imageBuffer);
+    const vectorConstraints = `
+- Use only basic SVG elements: rect, circle, ellipse, polygon, path.
+- Paths should use simple commands: M, L, Z.
+- Use solid fills only.
+- CRITICAL: DO NOT use the following SVG tags: <linearGradient>, <radialGradient>, <filter>, <feGaussianBlur>.
+- CRITICAL: DO NOT use the following SVG attributes: 'filter', 'opacity', 'style' with 'opacity'.`;
 
-    console.log(`✅ Image saved: ${fileName} (${(imageBuffer.length / 1024).toFixed(1)}KB)`);
+    const svgPrompt = `${generationMode === 'artistic' ? artisticPersona : vectorPersona}
 
-    return {
-      imageUrl: `/temp/${fileName}`,
-      imagePath: filePath,
-      imageBuffer,
-      style,
-      analysis,
-      prompt: enhancedPrompt,
-      metadata: {
-        originalPrompt: prompt,
-        profile: style,
-        parameters,
-        timestamp: new Date().toISOString()
-      }
+Generate a complete, valid SVG image in '${generationMode}' mode.
+
+CONCEPT TO ILLUSTRATE: ${prompt}
+STYLE: ${style} - ${styleProfile.attributes.details}
+
+REQUIREMENTS:
+- Start with: <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+- End with: </svg>
+- Use a professional and harmonious color palette suitable for the concept, chosen by you (the AI).
+- Include a white background rectangle: <rect width="100" height="100" fill="white"/>
+- Center the main subject.
+
+${generationMode === 'artistic' ? artisticConstraints : vectorConstraints}
+
+CRITICAL: Output ONLY the SVG code. No explanations, no markdown, no comments.`;
+
+    const generationConfig = {
+      temperature: generationMode === 'artistic' ? 0.75 : 0.25,
+      topP: 0.9,
+      topK: 40,
+      maxOutputTokens: SVG_OUTPUT_TOKENS,
+      responseMimeType: 'text/plain',
     };
 
-  } catch (err) {
-    const info = summarizeAxiosError(err);
-    console.error(
-      `❌ Imagen API request failed${info.status ? ` (HTTP ${info.status})` : ''}: ${info.hint}`
+    const generateSvg = async (attemptNum) => {
+      const config = { ...generationConfig, temperature: Math.min(0.85, generationConfig.temperature + (attemptNum * 0.05)) };
+      const res = await model.generateContent({
+        contents: [{ role: 'user', parts: [{ text: svgPrompt }] }],
+        generationConfig: config,
+      });
+      const raw = res?.response?.text?.() || '';
+      return stripCodeFencesAndQuotes(raw);
+    };
+
+    let text = await withRetries(
+      (attemptNum) => withTimeout(generateSvg(attemptNum), DEFAULT_TIMEOUT_MS, 'Gemini SVG generation'),
+      { maxRetries: MAX_RETRIES }
     );
 
-    // Provide more specific error messages
-    if (info.status === 403) {
-      throw new Error('Permission denied. Check if Imagen API is enabled and service account has correct permissions.');
-    } else if (info.status === 429) {
-      throw new Error('Rate limit exceeded. Please try again later.');
-    } else if (info.status === 400) {
-      throw new Error(`Invalid request: ${info.hint}. Check prompt and parameters.`);
+    let svg = extractSvgFromText(text);
+
+    if (!svg) {
+      console.error('❌ [Gemini SVG] Could not extract valid SVG from response');
+      return null;
     }
 
-    throw new Error(`Imagen API error (HTTP ${info.status || 'N/A'}): ${info.hint || 'Request failed'}`);
-  }
-}
+    svg = enhanceSvgCode(svg, metadata);
+    svg = sanitizeSvg(svg, generationMode);
 
-/**
- * Generate multiple variations for better vectorization options
- */
-async function generateVariations(prompt, count = 3, options = {}) {
-  console.log(`🎭 Generating ${count} variations for better vectorization options...`);
-
-  const variations = [];
-  const styles = ['minimal', 'geometric', 'default'];
-
-  for (let i = 0; i < Math.min(count, styles.length); i++) {
-    try {
-      const result = await generateImage(prompt, {
-        ...options,
-        style: styles[i],
-        seed: Math.floor(Math.random() * 1000000)
-      });
-      variations.push(result);
-      console.log(`✅ Variation ${i + 1}/${count} generated (${styles[i]} style)`);
-    } catch (error) {
-      console.warn(`⚠️ Variation ${i + 1} failed:`, error.message);
-    }
-  }
-
-  if (variations.length === 0) {
-    throw new Error('Failed to generate any variations');
-  }
-
-  // Return the best variation based on analysis scores
-  if (options.analyze) {
-    variations.sort((a, b) => (b.analysis?.score || 0) - (a.analysis?.score || 0));
-    console.log(`🏆 Best variation: ${variations[0].style} (score: ${(variations[0].analysis?.score * 100).toFixed(0)}%)`);
-  }
-
-  return variations;
-}
-
-/**
- * Check if the service is ready for generation
- */
-async function healthCheck() {
-  try {
-    const client = await initializeGoogleAuth();
-    if (!client) {
-      return {
-        ready: false,
-        error: 'Google Auth not initialized',
-        suggestion: 'Check service-account-key.json file'
-      };
+    let byteLen = Buffer.byteLength(svg, 'utf8');
+    if (byteLen > MAX_SVG_BYTES) {
+      console.warn(`⚠️ [Gemini SVG] Generated SVG too large (${byteLen} bytes), optimizing...`);
+      svg = await maybeOptimizeSvg(svg);
+      if (Buffer.byteLength(svg, 'utf8') > MAX_SVG_BYTES) {
+        svg = svg.replace(/\s+/g, ' ');
+        svg = svg.replace(/(\d+\.\d{3})\d+/g, '$1');
+      }
     }
 
-    const token = await client.getAccessToken();
-    if (!token?.token) {
-      return {
-        ready: false,
-        error: 'Cannot obtain access token',
-        suggestion: 'Check service account IAM permissions'
-      };
-    }
+    svg = await maybeOptimizeSvg(svg);
+    byteLen = Buffer.byteLength(svg, 'utf8');
+
+    await ensureTempDir(config.TEMP_DIR);
+    const fileName = uniqueSvgFilename(`vector_${generationMode}`);
+    const absPath = path.join(config.TEMP_DIR, fileName);
+    await fs.writeFile(absPath, svg, 'utf8');
+
+    console.log(`✅ [Gemini SVG] Successfully generated ${style} style SVG in '${generationMode}' mode (${byteLen} bytes)`);
 
     return {
-      ready: true,
-      message: 'Imagen service is ready',
-      capabilities: Object.keys(SVG_OPTIMIZATION_PROFILES)
+      svgCode: svg,
+      svgUrl: `/temp/${fileName}`,
+      method: 'gemini_fallback',
     };
-
+    
   } catch (error) {
-    return {
-      ready: false,
-      error: error.message,
-      suggestion: 'Check configuration and credentials'
-    };
+    console.error(`❌ [Gemini SVG] Generation failed in '${generationMode}' mode:`, error?.message || error);
+    return null;
   }
 }
-
-// Kick off auth initialization at module load
-initializeGoogleAuth().catch(() => { /* error logged in function */ });
 
 module.exports = {
-  generateImage,
-  generateVariations,
-  isGoogleAuthInitialized,
-  healthCheck,
-  enhancePrompt, // FIXED: Export the newly named function
-  // Export for testing/debugging
+  enhancePrompt,
+  generateFallbackSvg,
   _internal: {
-    detectStyleFromPrompt,
-    // enhancePromptForVectorization, // Original name, no longer needed
-    SVG_OPTIMIZATION_PROFILES
+    detectStyle,
+    detectSubject,
+    buildIntelligentPrompt
   }
 };
