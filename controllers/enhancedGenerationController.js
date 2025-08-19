@@ -39,9 +39,57 @@ async function generateWithInspiration(req, res) {
       });
     }
     
+    const allowedStyles = ['auto', 'minimal', 'geometric', 'organic', 'technical', 'playful', 'logo'];
+    const allowedComplexities = ['simple', 'moderate', 'detailed'];
+    const allowedColorModes = ['auto', 'vibrant', 'pastel', 'monochrome'];
+
+    const validationErrors = [];
+
+    if (useInspiration || inspirationUrls !== undefined) {
+      if (!Array.isArray(inspirationUrls) || inspirationUrls.length === 0) {
+        validationErrors.push('inspirationUrls must be a non-empty array of URLs');
+      } else {
+        const invalidUrls = inspirationUrls.filter((u) => {
+          try {
+            const parsed = new URL(u);
+            return !(parsed.protocol === 'http:' || parsed.protocol === 'https:');
+          } catch {
+            return true;
+          }
+        });
+        if (invalidUrls.length > 0) {
+          validationErrors.push(`Invalid URLs provided: ${invalidUrls.join(', ')}`);
+        }
+      }
+    }
+
+    if (style && !allowedStyles.includes(style)) {
+      validationErrors.push(`style must be one of: ${allowedStyles.join(', ')}`);
+    }
+    if (complexity && !allowedComplexities.includes(complexity)) {
+      validationErrors.push(`complexity must be one of: ${allowedComplexities.join(', ')}`);
+    }
+    if (colorMode && !allowedColorModes.includes(colorMode)) {
+      validationErrors.push(`colorMode must be one of: ${allowedColorModes.join(', ')}`);
+    }
+
+    if (validationErrors.length > 0) {
+      return res.status(400).json({
+        error: 'Invalid request parameters',
+        message: 'Validation failed',
+        details: validationErrors,
+        correlationId: cid
+      });
+    }
+
+    const sanitizedStyle = style === 'auto' ? undefined : style;
+    const sanitizedComplexity = complexity === undefined ? undefined : complexity;
+    const sanitizedColorMode = colorMode === 'auto' ? undefined : colorMode;
+	
+	
     let styleRecipe = null;
     let enhancedPrompt = userPrompt;
-    let recraftProfile = style || 'default';
+    let recraftProfile = sanitizedStyle || 'default';
     let svgConstraints = {};
     let inspirationFeatures = [];
     
@@ -195,7 +243,9 @@ async function generateWithInspiration(req, res) {
       metadata: {
         duration: totalMs,
         method: vectorResult.method,
-        style: recraftProfile
+        style: recraftProfile,
+        complexity: sanitizedComplexity,
+        colorMode: sanitizedColorMode
       }
     };
     

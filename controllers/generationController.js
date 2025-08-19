@@ -30,9 +30,9 @@ const emergencyFallbackStrategy = require('./strategies/emergencyFallbackStrateg
 
 // ---------------- Tunables ----------------
 const MAX_PROMPT_LEN = 800;
-const PIPELINE_TIMEOUT_MS = Number(process.env.PIPELINE_TIMEOUT_MS || 120_000);
+const PIPELINE_TIMEOUT_MS = config.PIPELINE_TIMEOUT_MS;
 const LOG_PREVIEW_LEN = 200;
-const MAX_SVG_BYTES = Number(process.env.RECRAFT_MAX_SVG_BYTES || 500 * 1024); // 500 KB
+const MAX_SVG_BYTES = config.RECRAFT_MAX_SVG_BYTES; // defaults to 500 KB
 
 // --------------- Helpers ------------------
 function newCorrelationId() {

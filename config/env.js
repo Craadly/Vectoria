@@ -64,6 +64,9 @@ const raw = {
   RECRAFT_HTTP_TIMEOUT_MS: toInt(process.env.RECRAFT_HTTP_TIMEOUT_MS, 30000, { min: 1000, max: 300000 }),
   RECRAFT_COOLDOWN_MINUTES: toInt(process.env.RECRAFT_COOLDOWN_MINUTES, 20, { min: 1, max: 120 }),
   RECRAFT_MAX_SVG_BYTES: toInt(process.env.RECRAFT_MAX_SVG_BYTES, 500 * 1024, { min: 10 * 1024, max: 5 * 1024 * 1024 }),
+  
+  // Pipeline
+  PIPELINE_TIMEOUT_MS: toInt(process.env.PIPELINE_TIMEOUT_MS, 120_000, { min: 10_000, max: 600_000 }),
 
   // Imagen HTTP
   IMAGEN_HTTP_TIMEOUT_MS: toInt(process.env.IMAGEN_HTTP_TIMEOUT_MS, 60000, { min: 5000, max: 300000 }),
@@ -75,6 +78,10 @@ const raw = {
   TEMP_MAX_BYTES: toInt(process.env.TEMP_MAX_BYTES, 512 * 1024 * 1024, { min: 1 * 1024 * 1024, max: 20 * 1024 * 1024 * 1024 }),
   TEMP_MAX_FILES: toInt(process.env.TEMP_MAX_FILES, 2000, { min: 10, max: 1_000_000 }),
   TEMP_ALLOWED_PREFIXES: toStr(process.env.TEMP_ALLOWED_PREFIXES || 'imagen_,vector_,vector_gemini_,vector_recraft_,gsa-'),
+
+  // Security
+  CORS_ALLOWED_ORIGINS: toStr(process.env.CORS_ALLOWED_ORIGINS || ''),
+  TEMP_ACCESS_TOKEN: toStr(process.env.TEMP_ACCESS_TOKEN || ''),
 
   // Flags
   ENABLE_PROMETHEUS: toBool(process.env.ENABLE_PROMETHEUS, false),
@@ -146,6 +153,7 @@ const validated = validateConfig(raw);
 const config = {
   ...validated,
   IS_PROD: validated.NODE_ENV === 'production',
+  CORS_ALLOWED_ORIGINS: validated.CORS_ALLOWED_ORIGINS.split(',').map((o) => o.trim()).filter(Boolean),
 };
 
 // ---------- Directory Setup ----------

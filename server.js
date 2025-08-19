@@ -15,12 +15,30 @@ const app = express();
 // --- Middleware Setup ---
 // Increase the JSON payload limit to handle potentially large data
 app.use(express.json({ limit: '50mb' }));
-// Enable Cross-Origin Resource Sharing (CORS)
-app.use(cors());
+// Enable Cross-Origin Resource Sharing (CORS) with whitelist
+const corsOptions = {
+    origin: function (origin, callback) {
+        if (!origin || config.CORS_ALLOWED_ORIGINS.includes(origin)) {
+            callback(null, true);
+        } else {
+            callback(new Error('Not allowed by CORS'));
+        }
+    }
+};
+app.use(cors(corsOptions));
 
 // --- Static File Serving ---
-app.use(express.static('public')); 
-app.use('/temp', express.static(path.join(__dirname, 'temp')));
+app.use(express.static('public'));
+
+// Protect access to temporary files with a simple token check
+const tempAuth = (req, res, next) => {
+    const token = req.query.token || req.header('x-temp-token');
+    if (token && config.TEMP_ACCESS_TOKEN && token === config.TEMP_ACCESS_TOKEN) {
+        return next();
+    }
+    return res.status(403).json({ error: 'Forbidden' });
+};
+app.use('/temp', tempAuth, express.static(config.TEMP_DIR));
 
 // --- API Route Handling ---
 app.use('/api', apiRoutes);
