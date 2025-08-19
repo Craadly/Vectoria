@@ -30,6 +30,9 @@ It combines the power of **Gemini** (prompt understanding), **Imagen** (image sy
 git clone https://github.com/Craadly/Vectoria.git
 cd Vectoria
 npm install
+```
+
+---
 
 ## 🔧 Usage
 
