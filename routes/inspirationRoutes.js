@@ -4,6 +4,11 @@
 const express = require('express');
 const router = express.Router();
 const inspirationService = require('../services/inspirationService');
+const { URL } = require('url');
+
+// Domains allowed for inspiration URLs
+const ALLOWED_DOMAINS = ['freepik.com', 'www.freepik.com', 'img.freepik.com'];
+
 
 // Middleware for request validation
 const validateUrls = (req, res, next) => {
@@ -29,7 +34,37 @@ const validateUrls = (req, res, next) => {
       message: 'Maximum 10 URLs allowed per request'
     });
   }
-  
+
+  for (const urlString of urls) {
+    try {
+      const parsed = new URL(urlString);
+
+      if (parsed.protocol !== 'https:') {
+        return res.status(400).json({
+          error: 'Invalid URL',
+          message: `URL must use HTTPS: ${urlString}`
+        });
+      }
+
+      const hostname = parsed.hostname.toLowerCase();
+      const isAllowed = ALLOWED_DOMAINS.some(
+        domain => hostname === domain || hostname.endsWith(`.${domain}`)
+      );
+
+      if (!isAllowed) {
+        return res.status(400).json({
+          error: 'Invalid URL',
+          message: `URL domain not allowed: ${urlString}`
+        });
+      }
+    } catch {
+      return res.status(400).json({
+        error: 'Invalid URL',
+        message: `Invalid URL format: ${urlString}`
+      });
+    }
+  }
+
   next();
 };
 
