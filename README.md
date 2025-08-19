@@ -48,3 +48,19 @@ npm install
    ```bash
    npm start
    ```
+3. Generate an illustration via the API:
+
+   ```bash
+   curl -X POST http://localhost:3001/api/generate \
+     -H "Content-Type: application/json" \
+     -d '{"prompt":"a colorful vector rocket"}'
+   ```
+
+4. Before starting the server, set these environment variables in your `.env`:
+
+   - `GEMINI_API_KEY` – Google Gemini authentication key
+   - `RECRAFT_API_KEY` – Recraft vectorization key
+   - `FREEPIK_API_KEY` – Freepik asset inspiration key
+   - `GOOGLE_PROJECT_ID` – Google Cloud project identifier
+   - `GOOGLE_LOCATION` – Google Cloud region (e.g., `us-central1`)
+   - `IMAGEN_MODEL_ID` – Imagen model ID (e.g., `imagen-4.0-generate-001`)

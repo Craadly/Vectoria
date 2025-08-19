@@ -9,3 +9,8 @@ const healthController = require('../controllers/healthController');
 
 // POST /api/generate
 router.post('/generate', generationController.generateSvg);
+
+// GET /api/health
+router.get('/health', healthController.checkHealth);
+
+module.exports = router;
