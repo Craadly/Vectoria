@@ -1,3 +1,10 @@
 node_modules/
 .env
 service-account-key.json
+temp/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
