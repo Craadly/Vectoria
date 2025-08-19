@@ -1,18 +1,46 @@
-node_modules/
+# Dependencies
+/node_modules
+/.pnp
+.pnp.js
 
-temp/
+# Build outputs
+/dist
+/build
+/.next
+/out
+/coverage
+
+# Temporary & cache files
+/temp
+/tmp
+/.cache
+/.parcel-cache
 
 # Logs
-*.log
 npm-debug.log*
 yarn-debug.log*
 pnpm-debug.log*
+*.log
 
+# Env & keys
+.env
+.env.*.local
+.env.local
+.env.production
 service-account-key.json
 *.key
 *.pem
-.env.local
-.env.production
-.env
 
-.vs
+# Editor & OS files
+.vscode/
+.vs/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Testing
+/coverage
+/jest-cache
+/jest-output
