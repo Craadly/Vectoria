@@ -1,5 +1,5 @@
 node_modules/
-.env
+
 service-account-key.json
 temp/
 
@@ -15,4 +15,4 @@ service-account-key.json
 .env.local
 .env.production
 .env
-.env
+.vs
