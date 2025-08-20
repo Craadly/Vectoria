@@ -1,172 +1,652 @@
-# 🎨 Vectoria – AI-Powered Vector Illustration & Icon Studio
+# 🎨 Vectoria AI - Advanced Vector Generation Platform
 
-Vectoria is an end-to-end AI pipeline that converts a textual prompt into an optimized, editable SVG asset. It orchestrates three main capabilities:
+<div align="center">
 
-- Prompt enhancement and reasoning (Gemini) — natural-language improvement and recipe generation.
-- Image synthesis (Imagen) — high-quality raster image generation used as an intermediate.
-- Vectorization & optimization (Recraft) — converts raster to clean, optimized SVG ready for web and design tools.
+![Vectoria AI Logo](https://img.shields.io/badge/Vectoria-AI%20Platform-blue?style=for-the-badge&logo=vector&logoColor=white)
+![Version](https://img.shields.io/badge/version-3.0.0-green?style=for-the-badge)
+![Node.js](https://img.shields.io/badge/Node.js-18+-brightgreen?style=for-the-badge&logo=node.js)
+![Next.js](https://img.shields.io/badge/Next.js-14+-black?style=for-the-badge&logo=next.js)
 
-For implementation details see [server.js](server.js) and the API routes in [routes/api.js](routes/api.js).
+**Transform text prompts into professional-grade SVG vectors using cutting-edge AI**
 
----
+[🚀 Quick Start](#quick-start) • [📖 Documentation](#api-documentation) • [🎯 Features](#features) • [🛠️ Development](#development)
 
-## Features
-
-- AI-driven SVG generation (vector-first pipeline)
-- Optional style inspiration extraction from Freepik-like references
-- Originality/similarity checking and automatic regeneration when outputs are too similar to inspirations
-- Local fallback vectorization (potrace) and robust Recraft remote vectorization
-- Temp directory management and periodic cleanup with locking
-- Developer-friendly API and UI (single-page frontend)
-
-Key UX: [public/index.html](public/index.html), client logic: [public/script.js](public/script.js), styles: [public/style.css](public/style.css).
+</div>
 
 ---
 
-## How it works (pipeline)
+## ✨ Features
 
-1. Request hits the API route implemented in [routes/api.js](routes/api.js) which forwards to the generation controller implemented in [`generateWithInspiration`](controllers/enhancedGenerationController.js) and [`generateSvg`](controllers/generationController.js).
-2. Optional inspiration extraction runs via [services/inspirationService.js](services/inspirationService.js) (see [`generateStyleRecipe`](services/inspirationService.js), [`checkSimilarity`](services/inspirationService.js), and `_internal` helpers such as [`_internal.processUrls`](services/inspirationService.js)).
-3. Prompt enhancement is performed by Gemini logic in [services/geminiService.js](services/geminiService.js) (see [`enhancePrompt`](services/geminiService.js) and prompt-build helpers).
-4. Imagen generates a raster image via [services/imagenService.js](services/imagenService.js) (see [`generateImage`](services/imagenService.js)).
-5. Vectorization is performed via Recraft or local fallback; main Recraft helpers are in [services/recraftService.js](services/recraftService.js) (see [`vectorizeImage`](services/recraftService.js), and helpers like `optimizeSvg`, `sanitizeSvg`).
-6. Strategy orchestration exists under [controllers/strategies/](controllers/strategies/) (see [`primaryPipeline`](controllers/strategies/primaryPipeline.js) and strategy utils in [controllers/strategies/utils.js](controllers/strategies/utils.js) including [`saveSvg`](controllers/strategies/utils.js)).
+### 🎨 **AI-Powered Vector Generation**
+- **Multi-stage AI Pipeline**: Gemini → Imagen → Recraft
+- **Intelligent Prompt Enhancement**: Natural language processing for optimal results
+- **Professional SVG Output**: Clean, optimized, scalable vector graphics
 
-Important helpers:
-- Temp cleanup and locking: [utils/cleanup.js](utils/cleanup.js) (see [`performCleanup`](utils/cleanup.js), [`cleanupWithLock`](utils/cleanup.js), and `acquireDirLock`/`releaseDirLock` logic).
-- Metrics: [utils/metrics.js](utils/metrics.js) (see [`MetricsCollector.metricsMiddleware`](utils/metrics.js)).
+### 🎯 **Smart Inspiration System**
+- **Style Extraction**: Analyze Freepik URLs for design inspiration
+- **Similarity Detection**: Automatic originality checking
+- **Style Recipes**: AI-generated design guidelines
+
+### 🚀 **Modern Tech Stack**
+- **Backend**: Node.js + Express with comprehensive API
+- **Frontend**: Next.js 14 + TypeScript + Tailwind CSS
+- **AI Services**: Google Gemini, Imagen, Recraft API
+- **Architecture**: Microservices with robust error handling
+
+### 🛡️ **Production Ready**
+- **Rate Limiting**: Smart request throttling
+- **Health Monitoring**: Comprehensive system status
+- **Auto Cleanup**: Intelligent temp file management
+- **Docker Support**: Container-ready deployment
 
 ---
 
-## API
+## 🚀 Quick Start
 
-Primary endpoints (see [routes/api.js](routes/api.js) and sub-routes):
+### Prerequisites
+- Node.js 18+ installed
+- API keys for: Gemini, Imagen, Recraft, Freepik
+- Git and npm/yarn
 
-- POST /api/generate
-  - Controller: [`generateSvg`](controllers/generationController.js)
-  - Basic vector generation from prompt.
-
-- POST /api/enhanced/generate (or equivalent)
-  - Controller: [`generateWithInspiration`](controllers/enhancedGenerationController.js)
-  - Supports body fields: userPrompt, inspirationUrls (array), useInspiration, checkSimilarity, style, complexity, colorMode.
-
-- Inspiration endpoints (see [routes/inspirationRoutes.js](routes/inspirationRoutes.js)):
-  - POST /api/inspiration/extract -> uses [services/inspirationService.js](services/inspirationService.js)
-  - POST /api/inspiration/recipe
-  - POST /api/inspiration/check-similarity
-
-- Health & metrics:
-  - GET /api/health -> [controllers/healthController.js](controllers/healthController.js)
-  - Metrics middleware lives in [utils/metrics.js](utils/metrics.js).
-
-Example cURL (quick):
+### 1. Clone & Install
 ```bash
+git clone https://github.com/Craadly/Vectoria.git
+cd Vectoria
+npm install
+cd frontend && npm install && cd ..
+```
+
+### 2. Environment Setup
+Create `.env` in the root directory:
+```env
+# AI Service APIs
+GEMINI_API_KEY=your_gemini_key_here
+RECRAFT_API_KEY=your_recraft_key_here
+FREEPIK_API_KEY=your_freepik_key_here
+
+# Google Cloud (for Imagen)
+GOOGLE_PROJECT_ID=your_project_id
+GOOGLE_LOCATION=us-central1
+IMAGEN_MODEL_ID=imagen-3.0-generate-001
+
+# Server Configuration
+PORT=3001
+FRONTEND_URL=http://localhost:3000
+TEMP_ACCESS_TOKEN=devtoken
+
+# Temp Directory Settings
+TEMP_DIR=./temp
+TEMP_MAX_BYTES=536870912
+TEMP_MAX_FILES=2000
+```
+
+Create `frontend/.env.local`:
+```env
+NEXT_PUBLIC_API_BASE=http://localhost:3001
+TEMP_ACCESS_TOKEN=devtoken
+```
+
+### 3. Run the Application
+```bash
+# Terminal 1: Start Backend
+npm run dev
+
+# Terminal 2: Start Frontend
+cd frontend && npm run dev
+```
+
+🎉 **Access your app**: 
+- Frontend: http://localhost:3000
+- Backend API: http://localhost:3001
+
+---
+
+## 🏗️ Architecture Overview
+
+```mermaid
+graph TB
+    A[User Input] --> B[Next.js Frontend]
+    B --> C[Express API]
+    C --> D[Gemini AI]
+    C --> E[Imagen API]
+    C --> F[Recraft API]
+    D --> G[Enhanced Prompt]
+    E --> H[Generated Image]
+    F --> I[SVG Vector]
+    G --> E
+    H --> F
+    I --> B
+```
+
+### 📁 Project Structure
+```
+Vectoria/
+├── 🎨 frontend/           # Next.js React Application
+│   ├── app/              # App Router pages
+│   ├── lib/              # API client & utilities
+│   └── package.json      # Frontend dependencies
+├── 🚀 controllers/       # Request handlers
+│   └── strategies/       # Generation strategies
+├── 🔧 services/          # AI service integrations
+├── 🛣️ routes/            # API route definitions
+├── ⚙️ config/            # Environment configuration
+├── 🛠️ utils/             # Helper utilities
+├── 📦 temp/              # Temporary file storage
+└── 🐳 Dockerfile         # Container configuration
+```
+
+---
+
+## 🔄 How Vectoria Works
+
+### 🎯 Generation Pipeline
+
+1. **📝 Prompt Processing**
+   - User submits text prompt via modern Next.js interface
+   - Optional inspiration URLs analyzed for style extraction
+   - Request routed through Express API with rate limiting
+
+2. **🧠 AI Enhancement** ([`geminiService.js`](services/geminiService.js))
+   - Gemini AI enhances and refines the prompt
+   - Generates detailed style recipes and technical specifications
+   - Optimizes for vector-friendly descriptions
+
+3. **🎨 Image Generation** ([`imagenService.js`](services/imagenService.js))
+   - Google Imagen creates high-quality raster image
+   - Uses enhanced prompt for optimal results
+   - Implements smart retry logic and error handling
+
+4. **🔧 Vectorization** ([`recraftService.js`](services/recraftService.js))
+   - Recraft API converts raster to clean SVG
+   - Local Potrace fallback for reliability
+   - Advanced SVG optimization and sanitization
+
+5. **✨ Quality Control**
+   - Similarity checking against inspiration sources
+   - Automatic regeneration if too similar
+   - Final optimization and delivery
+
+### 🎛️ Strategy System
+
+Advanced strategy pattern for handling different generation scenarios:
+
+- **[`primaryPipeline.js`](controllers/strategies/primaryPipeline.js)** - Main generation flow
+- **[`emergencyFallbackStrategy.js`](controllers/strategies/emergencyFallbackStrategy.js)** - Backup methods
+- **[`rasterOnlyStrategy.js`](controllers/strategies/rasterOnlyStrategy.js)** - Image-only fallback
+- **[`localPotraceStrategy.js`](controllers/strategies/localPotraceStrategy.js)** - Local vectorization
+
+---
+
+## 📡 API Documentation
+
+### 🔥 Core Endpoints
+
+#### `POST /api/generate`
+Basic vector generation from text prompt.
+
+**Request:**
+```json
+{
+  "userPrompt": "a minimalist rocket icon",
+  "style": "modern",
+  "complexity": "simple",
+  "colorMode": "monochrome"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "svgContent": "<svg>...</svg>",
+  "svgUrl": "/temp/vector_generated_123.svg?token=abc",
+  "metadata": {
+    "prompt": "enhanced prompt...",
+    "generationTime": 15.2,
+    "strategy": "primary"
+  }
+}
+```
+
+#### `POST /api/enhanced/generate`
+Advanced generation with inspiration support.
+
+**Request:**
+```json
+{
+  "userPrompt": "futuristic car dashboard",
+  "inspirationUrls": ["https://freepik.com/example"],
+  "useInspiration": true,
+  "checkSimilarity": true,
+  "style": "tech",
+  "complexity": "detailed"
+}
+```
+
+#### `GET /api/health`
+System health and service status.
+
+**Response:**
+```json
+{
+  "status": "healthy",
+  "services": {
+    "gemini": "✅ Connected",
+    "imagen": "✅ Connected", 
+    "recraft": "✅ Connected",
+    "freepik": "✅ Connected"
+  },
+  "uptime": "2h 15m",
+  "version": "3.0.0"
+}
+```
+
+### 🎨 Inspiration Endpoints
+
+- `POST /api/inspiration/extract` - Extract style from URLs
+- `POST /api/inspiration/recipe` - Generate style recipes
+- `POST /api/inspiration/check-similarity` - Compare for originality
+
+### 📊 Metrics & Monitoring
+
+- Comprehensive request logging with correlation IDs
+- Performance metrics collection
+- Automatic error summarization
+- Health check endpoints for production monitoring
+
+---
+
+## 🛠️ Development
+
+### 📋 Prerequisites
+- **Node.js** 18.0.0 or higher
+- **npm** 8.0.0 or higher
+- **Git** for version control
+- **API Keys** for all integrated services
+
+### 🏃‍♂️ Local Development
+
+1. **Install Dependencies**
+   ```bash
+   npm install
+   cd frontend && npm install
+   ```
+
+2. **Environment Configuration**
+   ```bash
+   cp .env.example .env
+   cp frontend/.env.example frontend/.env.local
+   # Edit files with your API keys
+   ```
+
+3. **Start Development Servers**
+   ```bash
+   # Backend (Terminal 1)
+   npm run dev
+   
+   # Frontend (Terminal 2)
+   cd frontend && npm run dev
+   ```
+
+4. **Access Application**
+   - 🎨 Frontend: http://localhost:3000
+   - 🔧 Backend API: http://localhost:3001
+   - 🩺 Health Check: http://localhost:3001/api/health
+
+### 🐳 Docker Deployment
+
+#### Development Container
+```bash
+docker build -t vectoria-dev .
+docker run -p 3001:3001 --env-file .env vectoria-dev
+```
+
+#### Production Deployment
+```bash
+# Build production image
+docker build -t vectoria-prod -f Dockerfile.prod .
+
+# Run with compose
+docker-compose up -d
+
+# Health check
+curl http://localhost:3001/api/health
+```
+
+### 🔍 Testing & Debugging
+
+#### Enable Debug Mode
+- **Query Parameter**: `?debug=1`
+- **Header**: `x-debug: 1`
+- **Environment**: `DEBUG=true`
+
+#### Testing Endpoints
+```bash
+# Basic generation test
 curl -X POST http://localhost:3001/api/generate \
   -H "Content-Type: application/json" \
-  -d '{"userPrompt":"a colorful vector rocket"}'
+  -d '{"userPrompt":"test rocket icon"}'
+
+# Health check
+curl http://localhost:3001/api/health
+
+# With inspiration
+curl -X POST http://localhost:3001/api/enhanced/generate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "userPrompt":"modern logo",
+    "inspirationUrls":["https://example.com"],
+    "useInspiration":true
+  }'
 ```
 
 ---
 
-## Configuration & Environment
+## 🚀 Production Deployment
 
-All runtime configuration is read/validated from [config/env.js](config/env.js). Required environment variables (examples):
+### 🌐 Environment Variables
 
-- GEMINI_API_KEY — Gemini/GCP key
-- RECRAFT_API_KEY — Recraft vectorization key
-- FREEPIK_API_KEY — Freepik inspiration API key
-- GOOGLE_PROJECT_ID, GOOGLE_LOCATION, IMAGEN_MODEL_ID
-- TEMP_DIR, TEMP_MAX_BYTES, etc. (see [config/env.js](config/env.js))
+#### Required API Keys
+```env
+GEMINI_API_KEY=your_gemini_api_key
+RECRAFT_API_KEY=your_recraft_api_key
+FREEPIK_API_KEY=your_freepik_api_key
+```
 
-The repository includes a `.env` example in the root (create a `.env` before running).
+#### Google Cloud Configuration
+```env
+GOOGLE_PROJECT_ID=your_gcp_project_id
+GOOGLE_LOCATION=us-central1
+IMAGEN_MODEL_ID=imagen-3.0-generate-001
+```
+
+#### Server Settings
+```env
+NODE_ENV=production
+PORT=3001
+FRONTEND_URL=https://your-domain.com
+TEMP_ACCESS_TOKEN=secure_production_token
+```
+
+### 📊 Monitoring
+
+- **Health Endpoint**: `/api/health`
+- **Metrics Collection**: Automatic request/response logging
+- **Error Tracking**: Comprehensive error summarization
+- **Performance**: Built-in timing and performance metrics
+
+### 🔒 Security Features
+
+- **Rate Limiting**: Configurable request throttling
+- **CORS Protection**: Whitelist-based origin control
+- **Token Authentication**: Secure temp file access
+- **Input Validation**: Comprehensive request sanitization
 
 ---
 
-## Local development
+## 🤝 Contributing
 
-Install dependencies and run dev server:
+### 📝 Guidelines
+
+1. **Code Style**
+   - Follow existing code patterns
+   - Use meaningful variable names
+   - Add JSDoc comments for functions
+   - Maintain consistent indentation
+
+2. **Git Workflow**
+   ```bash
+   git checkout -b feature/your-feature-name
+   git commit -m "feat: add amazing feature"
+   git push origin feature/your-feature-name
+   ```
+
+3. **Pull Request Process**
+   - Ensure all tests pass
+   - Update documentation if needed
+   - Add changelog entry
+   - Request review from maintainers
+
+### 🐛 Bug Reports
+
+Please include:
+- **Environment details** (Node.js version, OS)
+- **Steps to reproduce** the issue
+- **Expected vs actual behavior**
+- **Error logs** and stack traces
+
+### 💡 Feature Requests
+
+- Check existing issues first
+- Describe the use case clearly
+- Provide implementation suggestions
+- Consider backward compatibility
+
+---
+
+## 📚 Advanced Configuration
+
+### 🎛️ Strategy System
+
+Extend generation capabilities by adding custom strategies:
+
+```javascript
+// controllers/strategies/myCustomStrategy.js
+module.exports = async function myCustomStrategy(context) {
+  // Your custom generation logic here
+  return {
+    success: true,
+    svgContent: '...',
+    metadata: { strategy: 'custom' }
+  };
+};
+```
+
+### 🔧 Service Integration
+
+Add new AI services by implementing the service interface:
+
+```javascript
+// services/myAIService.js
+class MyAIService {
+  async processPrompt(prompt, options) {
+    // Service implementation
+  }
+}
+```
+
+### 🛡️ Middleware
+
+Custom middleware for specialized requirements:
+
+```javascript
+// middleware/customMiddleware.js
+module.exports = (req, res, next) => {
+  // Custom logic
+  next();
+};
+```
+
+---
+
+## 📋 Core Components
+
+### 🎮 Frontend Components
+- **[`app/page.tsx`](frontend/app/page.tsx)** - Main application interface with tabbed navigation
+- **[`lib/api.ts`](frontend/lib/api.ts)** - Centralized API client with type safety
+- **Modern UI**: Built with Next.js 14, TypeScript, and Tailwind CSS
+
+### 🚀 Backend Services
+- **[`server.js`](server.js)** - Main application entry point
+- **[`controllers/`](controllers/)** - Request handlers and business logic
+- **[`services/`](services/)** - AI service integrations and utilities
+- **[`routes/`](routes/)** - API endpoint definitions
+
+### 🔧 Utilities & Configuration
+- **[`config/env.js`](config/env.js)** - Environment configuration management
+- **[`utils/cleanup.js`](utils/cleanup.js)** - Intelligent temp file cleanup
+- **[`utils/metrics.js`](utils/metrics.js)** - Performance monitoring
+
+---
+
+## 🎯 Usage Examples
+
+### 🖥️ Frontend Interface
+
+Access the modern web interface at `http://localhost:3000`:
+
+1. **Generate Tab**: Basic vector creation from text prompts
+2. **Search Pipeline Tab**: Advanced generation with inspiration
+3. **Inspiration Tab**: Style extraction and analysis tools
+
+### 📡 API Integration
+
+```javascript
+// Using the built-in API client
+import { api } from '@/lib/api';
+
+// Basic generation
+const result = await api.post('/api/generate', {
+  userPrompt: 'minimalist rocket icon',
+  style: 'modern'
+});
+
+// With inspiration
+const enhanced = await api.post('/api/enhanced/generate', {
+  userPrompt: 'futuristic dashboard',
+  inspirationUrls: ['https://example.com/inspiration'],
+  useInspiration: true,
+  checkSimilarity: true
+});
+```
+
+### 🐚 Command Line Testing
 
 ```bash
-npm install
-npm run dev
-```
+# Quick generation test
+curl -X POST http://localhost:3001/api/generate \
+  -H "Content-Type: application/json" \
+  -d '{"userPrompt":"space rocket vector"}'
 
-The SPA frontend is served from [public/index.html](public/index.html). Client-side generation flow is implemented in [public/script.js](public/script.js) — the main handler is `handleGenerate` which posts to the API.
+# Health check
+curl http://localhost:3001/api/health
+
+# Pipeline status
+curl http://localhost:3001/api/pipeline/status
+```
 
 ---
 
-## Docker
+## 🔍 Troubleshooting
 
-A production-oriented Dockerfile is included: [Dockerfile](Dockerfile). It builds with a multi-stage image, installs lightweight runtime deps (tini, potrace, etc.), ensures /app/temp writable and runs `node server.js`.
+### Common Issues
 
-Build & run:
+#### ❌ **API Key Errors**
 ```bash
-docker build -t vectoria .
-docker run -p 3001:3001 --env-file .env vectoria
+Error: GEMINI_API_KEY not configured
+```
+**Solution**: Ensure all required API keys are set in `.env`
+
+#### ❌ **Port Already in Use**
+```bash
+Error: listen EADDRINUSE :::3001
+```
+**Solution**: Kill existing processes or use different ports
+```bash
+pkill -f "node server.js"
+lsof -ti:3001 | xargs kill -9
 ```
 
-Healthcheck in the Dockerfile expects /api/health to be available.
+#### ❌ **Frontend Build Errors**
+```bash
+Module not found: Can't resolve '@/lib/api'
+```
+**Solution**: Ensure TypeScript paths are configured correctly
+
+### 🔧 Debug Mode
+
+Enable comprehensive logging:
+```bash
+DEBUG=vectoria:* npm run dev
+```
+
+Or use query parameters:
+```
+http://localhost:3001/api/generate?debug=1
+```
 
 ---
 
-## Temp files & cleanup
+## 📈 Performance & Optimization
 
-Temp files are written to the configured TEMP_DIR. Periodic cleanup and locking is implemented in [utils/cleanup.js](utils/cleanup.js). Exposed helpers:
-- [`cleanupWithLock`](utils/cleanup.js)
-- [`performCleanup`](utils/cleanup.js)
-- internal safe unlink + within-dir guards to prevent accidental deletion.
+### ⚡ Performance Features
+- **Concurrent Processing**: Parallel AI service calls
+- **Smart Caching**: Intelligent result caching
+- **Rate Limiting**: Configurable request throttling
+- **Cleanup Scheduling**: Automatic temp file management
 
----
-
-## Error handling & observability
-
-- Controllers log correlation IDs and timings (see [`generateSvg`](controllers/generationController.js) and [`generateWithInspiration`](controllers/enhancedGenerationController.js)).
-- Metrics collection middleware: [`MetricsCollector.metricsMiddleware`](utils/metrics.js).
-- Detailed Recraft error summarization is in [services/recraftService.js](services/recraftService.js) (`summarizeAxiosError`).
-
----
-
-## Useful files & locations
-
-- Server entry: [server.js](server.js)
-- API routes: [routes/api.js](routes/api.js), [routes/inspirationRoutes.js](routes/inspirationRoutes.js), [routes/pipelineRoutes.js](routes/pipelineRoutes.js)
-- Controllers:
-  - [`generateSvg`](controllers/generationController.js)
-  - [`generateWithInspiration`](controllers/enhancedGenerationController.js)
-  - [controllers/healthController.js](controllers/healthController.js)
-- Services:
-  - [services/geminiService.js](services/geminiService.js)
-  - [services/imagenService.js](services/imagenService.js)
-  - [`vectorizeImage`](services/recraftService.js)
-  - [services/inspirationService.js](services/inspirationService.js)
-  - [services/pipelineService.js](services/pipelineService.js)
-- Frontend: [public/index.html](public/index.html), [public/script.js](public/script.js), [public/style.css](public/style.css)
-- Utilities: [utils/cleanup.js](utils/cleanup.js), [utils/metrics.js](utils/metrics.js)
+### 🎯 Optimization Tips
+- Use appropriate `complexity` settings for faster generation
+- Enable `checkSimilarity` only when needed
+- Implement client-side caching for repeated requests
+- Monitor temp directory size regularly
 
 ---
 
-## Testing & debugging
+## 🛡️ Security & Best Practices
 
-- Many services expose `_internal` helpers for unit testing (see [services/inspirationService.js](services/inspirationService.js) `_internal` exports).
-- To enable debug traces set query param `?debug=1` or header `x-debug: 1` (respecting production guard in `wantDebug` — see [`generateSvg`](controllers/generationController.js)).
+### 🔒 Security Features
+- **CORS Protection**: Whitelist-based origin control
+- **Rate Limiting**: Configurable request throttling  
+- **Input Validation**: Comprehensive request sanitization
+- **Token Authentication**: Secure temp file access
 
----
-
-## Contributing
-
-- Follow existing code style and tests if added.
-- Keep secrets out of the repo (use `.env`).
-- When adding new pipeline strategies register them under [controllers/strategies/](controllers/strategies/) and wire into the main controller flow.
-
----
-
-## License
-
-See LICENSE in the repository root (if present). If none, treat as internal by default.
+### 📋 Best Practices
+- Keep API keys secure and never commit them
+- Use environment-specific configurations
+- Implement proper error handling in client code
+- Monitor system resources and cleanup regularly
+- Enable rate limiting in production environments
 
 ---
 
-If you want, I can:
-- Expand the "API" section with exact request / response schemas for each endpoint.
-- Create a shorter QuickStart README for non-developers.
-- Add example Postman collection or OpenAPI spec generated from
+## 🆚 Version History
+
+### 🎉 Version 3.0.0 - Current
+- ✨ **New Next.js Frontend**: Modern React interface
+- 🎨 **Enhanced UI/UX**: Tabbed navigation and real-time feedback
+- 🔧 **Improved API**: Better error handling and response formats
+- 📱 **Responsive Design**: Mobile-friendly interface
+- 🛡️ **Security Enhancements**: Token-based authentication
+
+### 📚 Previous Versions
+- **v2.x**: Basic web interface with single-page application
+- **v1.x**: API-only implementation with command-line interface
+
+---
+
+## 📞 Support & Community
+
+### 🆘 Getting Help
+- 📖 **Documentation**: Check this README and inline code comments
+- 🐛 **Issues**: Report bugs via GitHub Issues
+- 💡 **Discussions**: Join community discussions
+- 📧 **Contact**: Reach out for enterprise support
+
+### 🤝 Contributing
+We welcome contributions! Please see our [Contributing Guidelines](#contributing) above.
+
+### 📄 License
+This project is licensed under the MIT License. See [LICENSE](LICENSE) file for details.
+
+---
+
+<div align="center">
+
+**🎨 Built with ❤️ by the Vectoria Team**
+
+[⭐ Star us on GitHub](https://github.com/Craadly/Vectoria) • [🐛 Report Bug](https://github.com/Craadly/Vectoria/issues) • [💡 Request Feature](https://github.com/Craadly/Vectoria/issues)
+
+**Transform your ideas into professional vectors with AI-powered precision**
+
+</div>

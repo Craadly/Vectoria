@@ -1,0 +1,2 @@
+# This file keeps the temp directory in git while ignoring its contents
+# The temp directory is used for storing temporary generated images and vectors

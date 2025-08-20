@@ -291,7 +291,8 @@ async function postProcessForVectorization(imageBuffer, style) {
       // Posterize effect - reduce color depth
       image = image.png({ 
         colors: style === 'minimal' ? 8 : 16,
-        dither: false 
+  // sharp expects a number between 0 and 1 for dither; use 0 to disable without warnings
+  dither: 0 
       });
     }
     

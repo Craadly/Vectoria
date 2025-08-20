@@ -1,35 +1,60 @@
+# ===================================================
+# VECTORIA AI - GITIGNORE
+# ===================================================
+
 # Dependencies
 /node_modules
+/frontend/node_modules
 /.pnp
 .pnp.js
+*.tgz
 
 # Build outputs
 /dist
 /build
 /.next
+/frontend/.next
 /out
+/frontend/out
 /coverage
 
 # Temporary & cache files
-/temp
+/temp/*
+!/temp/.gitkeep
 /tmp
 /.cache
 /.parcel-cache
+/frontend/.cache
 
 # Logs
 npm-debug.log*
 yarn-debug.log*
 pnpm-debug.log*
+lerna-debug.log*
 *.log
+/logs/*
+!/logs/.gitkeep
 
-# Env & keys
+# Environment & API keys
 .env
-.env.*.local
 .env.local
+.env.*.local
 .env.production
+.env.development
+/frontend/.env.local
+/frontend/.env.production
 service-account-key.json
 *.key
 *.pem
+*.p12
+
+# Generated images & vectors
+temp/*.png
+temp/*.jpg
+temp/*.jpeg
+temp/*.svg
+temp/*.webp
+temp/*.gif
 
 # Editor & OS files
 .vscode/
@@ -37,10 +62,51 @@ service-account-key.json
 .idea/
 *.swp
 *.swo
+*.tmp
 .DS_Store
 Thumbs.db
+desktop.ini
 
-# Testing
+# Testing & Coverage
 /coverage
 /jest-cache
 /jest-output
+/__tests__/coverage
+*.test.js.snap
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# TypeScript
+*.tsbuildinfo
+/frontend/next-env.d.ts
+
+# Vercel
+.vercel
+
+# Docker
+Dockerfile.prod
+docker-compose.override.yml
+
+# Backup files
+*.backup
+*.bak
+*~
+
+# Package manager lock files (keep only npm)
+yarn.lock
+pnpm-lock.yaml
+
+# macOS
+.AppleDouble
+.LSOverride
+
+# Linux
+*~
+
+# Windows
+ehthumbs.db
+ehthumbs_vista.db

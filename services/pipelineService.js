@@ -20,6 +20,8 @@ const axios = require('axios');
 const FormData = require('form-data');
 const sharp = require('sharp');
 const { fileTypeFromBuffer } = require('file-type');
+const { captureScreenshot } = require('./screenshotService');
+const imagenService = require('./imagenService');
 
 const config = require('../config/env');
 const {
@@ -38,7 +40,7 @@ const {
  * Docs: GET https://api.freepik.com/v1/resources?term=...&limit=...&order=relevance
  * Ref: docs.freepik.com (resources search) :contentReference[oaicite:0]{index=0}
  */
-async function freepikSearch(term, limit = 3) {
+async function freepikSearch(term, limit = 3, { freeOnly = false } = {}) {
   const { FREEPIK_API_KEY } = config;
   if (!FREEPIK_API_KEY) {
     throw new Error('FREEPIK_API_KEY is missing.');
@@ -57,13 +59,22 @@ async function freepikSearch(term, limit = 3) {
     validateStatus: (s) => s >= 200 && s < 400,
   });
 
-  const items = (res.data?.data || []).map((d) => ({
+  let items = (res.data?.data || []).map((d) => ({
     id: d.id,
     title: d.title,
     page_url: d.url, // e.g. https://www.freepik.com/free-vector/..._ID.htm
     thumb: d.image?.source?.url || null,
     type: d.image?.type || null, // 'vector' | 'photo' | ...
   }));
+
+  // Heuristic: prefer Free items when requested. Freepik page URLs commonly include '/free-' for free assets
+  if (freeOnly) {
+    const freeItems = items.filter((it) => typeof it.page_url === 'string' && /\/free[-_]/.test(it.page_url));
+    if (freeItems.length >= Math.min(limit, items.length)) {
+      items = freeItems;
+    }
+    // else: not enough free items found; fall back to mixed list to keep pipeline moving
+  }
 
   return items.slice(0, limit);
 }
@@ -102,9 +113,13 @@ function buildEnhancedPrompt(basePrompt, featureList) {
 
   // Category balance & complexity
   const iconCount = featureList.filter((f) => f.category === 'icons').length;
-  const mostlyIcons = iconCount > featureList.length / 2;
-  const avgBrightness = featureList.reduce((s, f) => s + (f.brightness ?? 0.5), 0) / featureList.length;
-  const avgEdge = featureList.reduce((s, f) => s + (f.edge_density ?? 0.1), 0) / featureList.length;
+  const mostlyIcons = featureList.length > 0 ? iconCount > featureList.length / 2 : false;
+  const avgBrightness = featureList.length > 0
+    ? featureList.reduce((s, f) => s + (f.brightness ?? 0.5), 0) / featureList.length
+    : 0.5;
+  const avgEdge = featureList.length > 0
+    ? featureList.reduce((s, f) => s + (f.edge_density ?? 0.1), 0) / featureList.length
+    : 0.1;
 
   let style = mostlyIcons ? 'clean vector icon set' : 'modern flat vector illustration';
   if (!mostlyIcons) {
@@ -160,24 +175,43 @@ async function generateImageWithGemini({ prompt, referenceImages = [] }) {
     });
   }
 
-  const endpoint =
-    'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-preview-image-generation:generateContent';
+  // Try multiple Gemini endpoints; some may be unavailable (404) depending on API enablement
+  const endpoints = [
+    'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent',
+    'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent',
+    'https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent',
+  ];
 
-  const res = await axios.post(
-    endpoint,
-    {
-      contents: [{ parts }],
-      generationConfig: { responseModalities: ['TEXT', 'IMAGE'] },
-    },
-    {
-      headers: {
-        'x-goog-api-key': GEMINI_API_KEY,
-        'Content-Type': 'application/json',
-      },
-      timeout: 120000,
-      validateStatus: (s) => s >= 200 && s < 400,
+  let res;
+  let lastErr;
+  for (const endpoint of endpoints) {
+    try {
+      res = await axios.post(
+        endpoint,
+        {
+          contents: [{ role: 'user', parts }],
+        },
+        {
+          headers: {
+            'x-goog-api-key': GEMINI_API_KEY,
+            'Content-Type': 'application/json',
+          },
+          timeout: 120000,
+          validateStatus: (s) => s >= 200 && s < 400,
+        }
+      );
+      break;
+    } catch (e) {
+      lastErr = e;
+      const status = e?.response?.status;
+      if (status === 404 || status === 400) continue; // try next
+      throw e; // network/401/403 etc: rethrow
     }
-  );
+  }
+  if (!res) {
+    const msg = lastErr?.response?.data?.error?.message || lastErr?.message || 'Gemini generateContent failed';
+    throw new Error(`GEMINI_UNAVAILABLE: ${msg}`);
+  }
 
   // Find the first inline image in candidates
   const candidates = res.data?.candidates || [];
@@ -278,36 +312,114 @@ async function ensureRecraftLimits(buffer, targetMime = 'image/png') {
  *
  * Returns: { inspirations, enhanced_prompt, gemini_png_bytes, bg_removed_png_bytes, svg_url }
  */
-async function createSvgFromSearch({ term, n = 3, userPrompt }) {
+async function createSvgFromSearch({ term, n = 3, userPrompt, freeOnly = true }) {
   if (!term || !userPrompt) {
     throw new Error('Both "term" and "userPrompt" are required.');
   }
 
+  console.log(`[Pipeline] Starting search for "${term}" with ${n} results, freeOnly=${freeOnly}`);
+
   // 1) Search Freepik
-  const picked = await freepikSearch(term, Math.min(Math.max(n, 2), 3)); // clamp 2..3
+  const picked = await freepikSearch(term, Math.min(Math.max(n, 2), 3), { freeOnly }); // clamp 2..3
+  
+  // If Freepik search fails or returns no usable images, use direct AI generation
+  if (!picked || picked.length === 0) {
+    console.log('[Pipeline] No usable Freepik images found, falling back to direct AI generation');
+    // Enhanced prompt without inspirations
+    const enhanced = `${userPrompt}. Create a professional, modern design with clean lines and vibrant colors. Style: minimalist, tech-focused, scalable vector graphics.`;
+    
+    // Try Gemini first, then fall back to Imagen
+    let genBuffer, genMime;
+    try {
+      const gen = await generateImageWithGemini({ prompt: enhanced, referenceImages: [] });
+      genBuffer = gen.buffer; genMime = gen.mime;
+      console.log('[Pipeline] Generated with Gemini (no inspiration)');
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.warn(`[Pipeline] Gemini unavailable (no refs path), falling back to Imagen: ${e.message}`);
+      const imagen = await imagenService.generateImage(enhanced, { analyze: false, skipPostProcessing: false });
+      genBuffer = imagen.imageBuffer; genMime = 'image/png';
+    }
+    const { buffer: limitedBeforeBG, mime: limitedMimeA } = await ensureRecraftLimits(genBuffer, genMime || 'image/png');
+    const bgRemovedPng = await recraftRemoveBg(limitedBeforeBG, limitedMimeA);
+    const { buffer: limitedBeforeSVG, mime: limitedMimeB } = await ensureRecraftLimits(bgRemovedPng, 'image/png');
+    const svgUrl = await recraftVectorize(limitedBeforeSVG, limitedMimeB);
+    return {
+      inspirations: [],
+      enhanced_prompt: enhanced,
+      gemini_png_bytes: genBuffer.length,
+      bg_removed_png_bytes: bgRemovedPng.length,
+      svg_url: svgUrl,
+      note: 'Proceeded without inspirations due to no search results.'
+    };
+  }
 
   // 2) Resolve to preview buffers + features
   const refBuffers = [];
   const refFeatures = [];
   for (const item of picked) {
-    // Use page URL -> API download -> preview raster (via inspirationService helpers)
-    const dlUrl = await freepikGetDownloadUrl(item.id);
-    const { buffer } = await loadRasterFromUrl(dlUrl);
-    await sharp(buffer).metadata(); // sanity
-    refBuffers.push(buffer);
-
-    const feats = await extractFeaturesFromBuffer(buffer, item.page_url);
-    refFeatures.push(feats);
+    try {
+      // Try official API download URL first (may 403 for premium)
+      const dlUrl = await freepikGetDownloadUrl(item.id);
+      const { buffer } = await loadRasterFromUrl(dlUrl);
+      await sharp(buffer).metadata();
+      refBuffers.push(buffer);
+      const feats = await extractFeaturesFromBuffer(buffer, item.page_url);
+      refFeatures.push(feats);
+    } catch (err) {
+      // Fallback to thumbnail if available; otherwise, try page screenshot; else skip this item
+      const msg = (err && err.message) ? err.message : String(err);
+      // eslint-disable-next-line no-console
+      console.warn(`[Pipeline] Skipping premium or inaccessible item ${item.id}: ${msg}`);
+      if (item.thumb) {
+        try {
+          const { buffer: thumbBuf } = await loadRasterFromUrl(item.thumb);
+          await sharp(thumbBuf).metadata();
+          refBuffers.push(thumbBuf);
+          const feats = await extractFeaturesFromBuffer(thumbBuf, item.page_url);
+          refFeatures.push(feats);
+          // eslint-disable-next-line no-console
+          console.log(`[Pipeline] Thumbnail fallback used for ${item.id}`);
+          continue;
+        } catch (e2) {
+          // eslint-disable-next-line no-console
+          console.warn(`[Pipeline] Thumbnail fallback failed for ${item.id}: ${e2.message}`);
+        }
+      }
+      // Try headless screenshot as last resort (may include watermarks/UI; used only for style cues)
+      try {
+        const shot = await captureScreenshot(item.page_url, { width: 1024, height: 1024, fullPage: false });
+        await sharp(shot).metadata();
+        refBuffers.push(shot);
+        const feats = await extractFeaturesFromBuffer(shot, item.page_url);
+        refFeatures.push(feats);
+        // eslint-disable-next-line no-console
+        console.log(`[Pipeline] Screenshot fallback used for ${item.id}`);
+      } catch (e3) {
+        // eslint-disable-next-line no-console
+        console.warn(`[Pipeline] Screenshot fallback failed for ${item.id}: ${e3.message}`);
+      }
+      // no buffer for this item; continue
+    }
   }
 
   // 3) Build enhanced prompt
   const enhanced = buildEnhancedPrompt(userPrompt, refFeatures);
 
-  // 4) Generate with Gemini (feed refs as inline images)
-  const { buffer: genBuffer, mime: genMime } = await generateImageWithGemini({
-    prompt: enhanced,
-    referenceImages: refBuffers,
-  });
+  // 4) Generate with Gemini (feed refs as inline images); fallback to Imagen
+  let genBuffer, genMime;
+  try {
+    const gen = await generateImageWithGemini({
+      prompt: enhanced,
+      referenceImages: refBuffers.slice(0, 3),
+    });
+    genBuffer = gen.buffer; genMime = gen.mime;
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.warn(`[Pipeline] Gemini generation failed, falling back to Imagen: ${e.message}`);
+    const imagen = await imagenService.generateImage(enhanced, { analyze: false, skipPostProcessing: false });
+    genBuffer = imagen.imageBuffer; genMime = 'image/png';
+  }
 
   // 5) Recraft: remove background
   const { buffer: limitedBeforeBG, mime: limitedMimeA } = await ensureRecraftLimits(genBuffer, genMime || 'image/png');
@@ -318,11 +430,16 @@ async function createSvgFromSearch({ term, n = 3, userPrompt }) {
   const svgUrl = await recraftVectorize(limitedBeforeSVG, limitedMimeB);
 
   return {
-    inspirations: picked.map((p, i) => ({ ...p, palette: refFeatures[i].palette, category: refFeatures[i].category })),
+    inspirations: refFeatures.map((feats, i) => ({
+      ...(picked[i] || {}),
+      palette: feats.palette,
+      category: feats.category,
+    })),
     enhanced_prompt: enhanced,
     gemini_png_bytes: genBuffer.length,
     bg_removed_png_bytes: bgRemovedPng.length,
     svg_url: svgUrl,
+    refs_used: refBuffers.length
   };
 }
 

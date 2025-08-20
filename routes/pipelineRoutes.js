@@ -7,11 +7,12 @@ const { createSvgFromSearch } = require('../services/pipelineService');
 
 router.post('/search-generate-svg', async (req, res) => {
   try {
-    const { term, n, prompt } = req.body || {};
+    const { term, n, prompt, freeOnly } = req.body || {};
     const result = await createSvgFromSearch({
       term,
       n: n ?? 3,
       userPrompt: prompt,
+      freeOnly: freeOnly !== undefined ? !!freeOnly : true,
     });
     res.json({ success: true, ...result });
   } catch (err) {

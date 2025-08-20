@@ -167,11 +167,70 @@ async function downloadToMemory(url) {
                 data: error.response.data,
                 headers: error.response.headers,
             });
-            const apiError = error.response.data?.error?.message || JSON.stringify(error.response.data);
+            
+            // Handle specific error cases
+            if (error.response.status === 403) {
+                const errorData = error.response.data;
+                if (errorData?.data?.message?.includes('Premium users') || 
+                    errorData?.message?.includes('Premium users') ||
+                    errorData?.error?.includes('Premium')) {
+                    throw new Error('PREMIUM_CONTENT_RESTRICTION: This asset requires a Freepik Premium subscription. Please try a different image or upgrade your Freepik API plan.');
+                }
+                throw new Error('ACCESS_DENIED: You do not have permission to access this resource. Please check your API key permissions.');
+            }
+            
+            if (error.response.status === 429) {
+                throw new Error('RATE_LIMIT_EXCEEDED: Too many requests. Please wait a moment before trying again.');
+            }
+            
+            if (error.response.status === 404) {
+                throw new Error('RESOURCE_NOT_FOUND: The requested Freepik resource was not found. Please check the URL.');
+            }
+            
+            const apiError = error.response.data?.error?.message || 
+                           error.response.data?.data?.message || 
+                           error.response.data?.message ||
+                           JSON.stringify(error.response.data);
             throw new Error(`Freepik API Error (${error.response.status}): ${apiError}`);
         }
         throw new Error(`Download failed: ${error.message}`);
     }
+}
+
+/**
+ * Load a raster image from a direct URL (arraybuffer fetch). Does not require Freepik resource id.
+ * Useful when we already have a signed temporary URL from Freepik API, or a thumbnail URL.
+ */
+async function loadRasterFromUrl(directUrl) {
+  try {
+    const imageResponse = await axios({
+      method: 'GET',
+      url: directUrl,
+      responseType: 'arraybuffer',
+      timeout: CONFIG.DOWNLOAD_TIMEOUT_MS,
+      headers: {
+        'User-Agent': CONFIG.USER_AGENT,
+        'Accept': 'image/*',
+      },
+      validateStatus: (s) => s >= 200 && s < 400,
+    });
+    return { buffer: Buffer.from(imageResponse.data) };
+  } catch (error) {
+    if (error.response) {
+      const status = error.response.status;
+      const data = error.response.data;
+      // Mirror the error typing used elsewhere for consistency
+      if (status === 403) {
+        throw new Error(
+          'ACCESS_DENIED: Unable to fetch raster from provided URL (HTTP 403). It may be restricted or expired.'
+        );
+      }
+      throw new Error(
+        `FETCH_FAILED: Unable to fetch raster (HTTP ${status}): ${data?.message || 'Unknown error'}`
+      );
+    }
+    throw new Error(`FETCH_FAILED: ${error.message}`);
+  }
 }
 
 
@@ -374,11 +433,75 @@ async function processUrls(urls) {
         await new Promise(resolve => setTimeout(resolve, CONFIG.RATE_LIMIT_DELAY_MS));
       }
     } catch (error) {
-      errors.push({ url: url, error: error.message });
+      console.log(`[Inspiration] Error processing ${url}: ${error.message}`);
+      
+      // Check if it's a premium content restriction
+      if (error.message.includes('PREMIUM_CONTENT_RESTRICTION')) {
+        errors.push({ 
+          url: url, 
+          error: error.message,
+          type: 'premium_restriction',
+          suggestions: generateFreeAlternativeSuggestions(url)
+        });
+      } else {
+        errors.push({ url: url, error: error.message, type: 'general_error' });
+      }
     }
   }
   
   return { results, errors };
+}
+
+/**
+ * Generate suggestions for free alternatives when premium content is restricted
+ */
+function generateFreeAlternativeSuggestions(restrictedUrl) {
+  try {
+    const url = new URL(restrictedUrl);
+    const pathParts = url.pathname.split('/').filter(Boolean);
+    
+    // Extract potential keywords from URL
+    const keywords = [];
+    pathParts.forEach(part => {
+      if (part.includes('-')) {
+        keywords.push(...part.split('-').filter(word => word.length > 2));
+      }
+    });
+    
+    // Generate simpler search terms
+    const freeSearchTerms = [
+      'free vector icons',
+      'simple illustration',
+      'basic vector',
+      'outline icons',
+      'minimalist design'
+    ];
+    
+    // If we can extract meaningful keywords, add them
+    if (keywords.length > 0) {
+      const mainKeyword = keywords[0];
+      freeSearchTerms.unshift(
+        `free ${mainKeyword} icon`,
+        `simple ${mainKeyword} vector`,
+        `${mainKeyword} outline`
+      );
+    }
+    
+    return {
+      search_terms: freeSearchTerms.slice(0, 5),
+      tips: [
+        'Search for "free" + your keyword in Freepik',
+        'Try simpler, outline-style versions',
+        'Look for basic geometric designs',
+        'Use icons instead of complex illustrations'
+      ]
+    };
+  } catch (e) {
+    return {
+      search_terms: ['free vector icons', 'simple illustration', 'basic design'],
+      tips: ['Try searching for free alternatives in Freepik']
+    };
+  }
 }
 
 /**
@@ -507,8 +630,8 @@ async function checkOutputSimilarity(req, res) {
   try {
     const { output_url, inspiration_urls } = req.body;
     if (!output_url) return res.status(400).json({ error: 'Invalid request', message: 'Please provide output_url' });
-    
-    const outputBuffer = await downloadToMemory(output_url);
+  // output_url may not be a Freepik page; fetch directly as raster
+  const { buffer: outputBuffer } = await loadRasterFromUrl(output_url);
     const similarityResult = await checkSimilarity(outputBuffer, inspiration_urls || []);
     const adjustments = generateAdjustmentStrategy(similarityResult.similarities);
     
@@ -553,6 +676,8 @@ module.exports = {
     checkSimilarity,
     featureCache,
     processUrls,
-    generateAdjustmentStrategy
+  generateAdjustmentStrategy,
+  loadRasterFromUrl,
+  downloadToMemory
   }
 };
